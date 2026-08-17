@@ -1,0 +1,17 @@
+# Student enquiries and newsletter subscribers.
+#
+# These are real people's names, phone numbers and email addresses. They are
+# operational data, not source code, and committing them would publish personal
+# details of prospective students to whoever can read the repository.
+storage/*.jsonl
+storage/*.log
+
+# Keep the directory itself, and its deny rule, in the repo.
+!storage/.htaccess
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

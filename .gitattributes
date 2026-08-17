@@ -1,0 +1,16 @@
+# Force LF on everything that gets uploaded to the Linux host.
+#
+# Committed from Windows, so without this a fresh clone converts these to CRLF
+# and uploads them that way. Apache is picky about stray carriage returns in
+# .htaccess directives, and a PHP file with CRLF can emit them before the
+# headers it is trying to set.
+*.php       text eol=lf
+*.html      text eol=lf
+*.md        text eol=lf
+.htaccess   text eol=lf
+.gitignore  text eol=lf
+
+# Binary: never touch these.
+*.png       binary
+*.jpg       binary
+*.ico       binary
