@@ -6,6 +6,7 @@
 # headers it is trying to set.
 *.php       text eol=lf
 *.html      text eol=lf
+*.js        text eol=lf
 *.md        text eol=lf
 .htaccess   text eol=lf
 .gitignore  text eol=lf
