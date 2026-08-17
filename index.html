@@ -41,7 +41,7 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
           <sc-for list="{{ navLinks }}" as="link" hint-placeholder-count="5">
             <a href="{{ link.href }}" onclick="{{ closeMenu }}" style="font-size:1rem;font-weight:600;color:#1d1f20;padding:12px 0;border-bottom:1px solid #e2e5e4;text-decoration:none">{{ link.label }}</a>
           </sc-for>
-          <a href="./mpc-login.dc.html" style="font-size:1rem;font-weight:600;color:#1d1f20;padding:12px 0;border-bottom:1px solid #e2e5e4;text-decoration:none">Log In</a>
+          <a href="./mpc-login.html" style="font-size:1rem;font-weight:600;color:#1d1f20;padding:12px 0;border-bottom:1px solid #e2e5e4;text-decoration:none">Log In</a>
           <a href="#apply-form" onclick="{{ closeMenu }}" style="background:#24A68A;color:#fff;padding:12px 20px;border-radius:6px;font-size:1rem;font-weight:700;text-decoration:none;text-align:center;margin-top:8px">Apply Now</a>
         </nav>
       </sc-if>
@@ -50,7 +50,7 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
       <sc-for list="{{ navLinks }}" as="link" hint-placeholder-count="5">
         <a href="{{ link.href }}" style="font-size:.9rem;font-weight:600;color:#646965;padding:4px 0;border-bottom:2px solid transparent;text-decoration:none" style-hover="color:#24A68A;border-bottom-color:#24A68A">{{ link.label }}</a>
       </sc-for>
-      <a href="./mpc-login.dc.html" style="font-size:.9rem;font-weight:600;color:#646965;padding:4px 0;border-bottom:2px solid transparent;text-decoration:none" style-hover="color:#24A68A;border-bottom-color:#24A68A">Log In</a>
+      <a href="./mpc-login.html" style="font-size:.9rem;font-weight:600;color:#646965;padding:4px 0;border-bottom:2px solid transparent;text-decoration:none" style-hover="color:#24A68A;border-bottom-color:#24A68A">Log In</a>
       <a href="#apply-form" style="background:#24A68A;color:#fff;padding:10px 20px;border-radius:6px;font-size:.9rem;font-weight:700;text-decoration:none" style-hover="background:#1C8570">Apply Now</a>
     </nav>
   </div>
@@ -739,14 +739,14 @@ class Component extends DCLogic {
   ];
 
   courses = [
-    { tag: 'Networking', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Computer Networking Fundamentals', sub: 'Build a Foundation in Computer Networking', desc: 'Learn networking fundamentals such as IP addressing, routing, switching, network devices, and troubleshooting — with hands-on lab practice throughout.', cta: 'View Course', href: './course-computer-networking.dc.html' },
-    { tag: 'Data', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Data Analysis', sub: 'Turn Data Into Useful Information', desc: 'Learn the fundamentals of data collection, cleaning, organization, analysis, visualization, and reporting, and complete practical exercises using the tools available at MPC.', cta: 'View Course', href: './course-data-analysis.dc.html' },
-    { tag: 'Web', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Web Design', sub: 'Design and Build Real Websites', desc: 'Learn HTML, CSS, responsive layout, and basic JavaScript, and finish with a published website project.', cta: 'View Course', href: './course-web-design.dc.html' },
-    { tag: 'Security', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Cybersecurity Foundations', sub: 'Protect Systems and Data', desc: 'Learn to identify common threats and apply practical security habits for devices, accounts, and networks.', cta: 'View Course', href: './course-cybersecurity.dc.html' },
-    { tag: 'Data', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Database Management', sub: 'Design, Build, and Query Databases', desc: 'Learn relational database concepts, schema design, and SQL to build and manage real databases.', cta: 'View Course', href: './course-database-management.dc.html' },
-    { tag: 'Foundations', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Basic Computer Skills', sub: 'Build Confidence With Computers', desc: 'Learn to operate a computer, use productivity software, and stay safe online — a strong starting point before other MPC courses.', cta: 'View Course', href: './course-basic-computers.dc.html' },
-    { tag: 'AI', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Introduction to Artificial Intelligence', sub: 'Understand How AI Works', desc: 'A practical, non-technical introduction to AI concepts, applications, and responsible use.', cta: 'View Course', href: './course-basic-ai.dc.html' },
-    { tag: 'Programming', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Basic Python Programming', sub: 'Learn to Think and Build Like a Programmer', desc: 'Learn Python fundamentals — variables, logic, functions, and data structures — and build small working programs each week.', cta: 'View Course', href: './course-basic-python.dc.html' }
+    { tag: 'Networking', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Computer Networking Fundamentals', sub: 'Build a Foundation in Computer Networking', desc: 'Learn networking fundamentals such as IP addressing, routing, switching, network devices, and troubleshooting — with hands-on lab practice throughout.', cta: 'View Course', href: './course-computer-networking.html' },
+    { tag: 'Data', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Data Analysis', sub: 'Turn Data Into Useful Information', desc: 'Learn the fundamentals of data collection, cleaning, organization, analysis, visualization, and reporting, and complete practical exercises using the tools available at MPC.', cta: 'View Course', href: './course-data-analysis.html' },
+    { tag: 'Web', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Web Design', sub: 'Design and Build Real Websites', desc: 'Learn HTML, CSS, responsive layout, and basic JavaScript, and finish with a published website project.', cta: 'View Course', href: './course-web-design.html' },
+    { tag: 'Security', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Cybersecurity Foundations', sub: 'Protect Systems and Data', desc: 'Learn to identify common threats and apply practical security habits for devices, accounts, and networks.', cta: 'View Course', href: './course-cybersecurity.html' },
+    { tag: 'Data', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Database Management', sub: 'Design, Build, and Query Databases', desc: 'Learn relational database concepts, schema design, and SQL to build and manage real databases.', cta: 'View Course', href: './course-database-management.html' },
+    { tag: 'Foundations', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Basic Computer Skills', sub: 'Build Confidence With Computers', desc: 'Learn to operate a computer, use productivity software, and stay safe online — a strong starting point before other MPC courses.', cta: 'View Course', href: './course-basic-computers.html' },
+    { tag: 'AI', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Introduction to Artificial Intelligence', sub: 'Understand How AI Works', desc: 'A practical, non-technical introduction to AI concepts, applications, and responsible use.', cta: 'View Course', href: './course-basic-ai.html' },
+    { tag: 'Programming', tagBg: '#e9f6f3', tagColor: '#24A68A', title: 'Basic Python Programming', sub: 'Learn to Think and Build Like a Programmer', desc: 'Learn Python fundamentals — variables, logic, functions, and data structures — and build small working programs each week.', cta: 'View Course', href: './course-basic-python.html' }
   ];
 
   steps = [
