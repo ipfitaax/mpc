@@ -13,6 +13,21 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Saira:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="./image-slot.js"></script>
 <style>
+/* Hero slides: show the WHOLE photograph, not a crop of it.
+   The slides are 1408x680 (about 2.07:1) and the hero box is 600px tall, so
+   at a 1280px window the image rendered 618px high and the hero's
+   overflow:hidden ate the bottom of it. Narrower windows cut more. These are
+   photographs of MPC's own lab and students, so cropping them is throwing away
+   the thing that makes the page credible.
+   image-slot renders into shadow DOM, so ::part(image) is the only handle on
+   the <img> from out here. contain fits the whole frame inside the box; any
+   letterboxing lands on the hero's own #1d1f20 background and reads as
+   intentional rather than broken.
+   !important is doing real work here, not cargo cult: image-slot.js writes
+   "height:103.03%" as an INLINE style on the <img> to oversize it and crop the
+   overflow. An inline style outranks a ::part() rule, so without !important the
+   fit changes and the 18px overflow stays exactly where it was. */
+#home image-slot::part(image){width:100%!important;height:100%!important;object-fit:contain!important;object-position:center!important}
 *{box-sizing:border-box}
 body{margin:0}
 a{color:#24A68A}
