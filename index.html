@@ -12,6 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Saira:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="./image-slot.js"></script>
+<script src="./api-form.js"></script>
 <style>
 /* Hero slides: show the WHOLE photograph, not a crop of it.
    The slides are 1408x680 (about 2.07:1) and the hero box is 600px tall, so
@@ -526,31 +527,31 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
       <div id="apply-form" style="background:#fff;border:1px solid #e2e5e4;border-radius:6px;padding:30px;scroll-margin-top:88px">
         <h3 style="font-size:1.12rem;font-weight:700;color:#1d1f20;margin:0 0 8px">Ask About Enrollment</h3>
         <p style="font-size:.92rem;margin:0 0 18px">Complete the short form and the MPC enrollment team will contact you.</p>
-        <form onsubmit="event.preventDefault();this.querySelector('.form-msg').style.display='block';">
+        <form action="./api/enquiry.php" method="post" onsubmit="{{ submitEnquiry }}">
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:16px">
             <div>
               <label style="display:block;font-size:.85rem;font-weight:700;color:#1d1f20;margin-bottom:6px">Full name</label>
-              <input type="text" required style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
+              <input type="text" name="name" required style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
             </div>
             <div>
               <label style="display:block;font-size:.85rem;font-weight:700;color:#1d1f20;margin-bottom:6px">Phone number</label>
-              <input type="tel" required style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
+              <input type="tel" name="phone" required style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
             </div>
           </div>
           <div style="margin-bottom:16px">
             <label style="display:block;font-size:.85rem;font-weight:700;color:#1d1f20;margin-bottom:6px">Email address</label>
-            <input type="email" style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
+            <input type="email" name="email" style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:16px">
             <div>
               <label style="display:block;font-size:.85rem;font-weight:700;color:#1d1f20;margin-bottom:6px">Have you completed high school?</label>
-              <select required style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
+              <select name="education" required style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
                 <option value="">Select</option><option>Yes</option><option>No</option><option>Currently studying</option>
               </select>
             </div>
             <div>
               <label style="display:block;font-size:.85rem;font-weight:700;color:#1d1f20;margin-bottom:6px">Which program interests you?</label>
-              <select required style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
+              <select name="program" required style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
                 <option value="">Select</option><option>One-Year Professional IT Skills Program</option><option>Six-Month Intensive IT Skills Program</option><option>CCNA 200-301</option><option>Data Analysis</option><option>CompTIA A+</option><option>Not sure — please advise</option>
               </select>
             </div>
@@ -558,22 +559,31 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:16px">
             <div>
               <label style="display:block;font-size:.85rem;font-weight:700;color:#1d1f20;margin-bottom:6px">What area of IT interests you most?</label>
-              <input type="text" placeholder="Networking, support, data, software…" style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
+              <input type="text" name="interest" placeholder="Networking, support, data, software…" style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
             </div>
             <div>
               <label style="display:block;font-size:.85rem;font-weight:700;color:#1d1f20;margin-bottom:6px">Best time to contact you</label>
-              <select style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
+              <select name="best_time" style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff">
                 <option value="">Select</option><option>Morning</option><option>Afternoon</option><option>Evening</option>
               </select>
             </div>
           </div>
           <div style="margin-bottom:16px">
             <label style="display:block;font-size:.85rem;font-weight:700;color:#1d1f20;margin-bottom:6px">Your question or message</label>
-            <textarea style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff;min-height:96px;resize:vertical"></textarea>
+            <textarea name="message" style="width:100%;padding:12px 14px;border:1px solid #e2e5e4;border-radius:6px;font-size:.95rem;color:#646965;background:#fff;min-height:96px;resize:vertical"></textarea>
           </div>
-          <button type="submit" style="width:100%;display:inline-block;padding:13px 26px;border-radius:6px;font-weight:700;font-size:.95rem;background:#24A68A;color:#fff;border:2px solid #24A68A;cursor:pointer" style-hover="background:#1C8570;border-color:#1C8570">Submit My Inquiry</button>
+          <!-- Honeypot. Real students never see this; bots fill every field they
+               find, and api/enquiry.php discards anything that arrives with it
+               set. Hidden from assistive tech too, so a screen-reader user is
+               not asked to fill in a trap. -->
+          <div style="position:absolute;left:-9999px" aria-hidden="true">
+            <label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+          </div>
+          <button type="submit" disabled="{{ enquirySending }}" style="width:100%;display:inline-block;padding:13px 26px;border-radius:6px;font-weight:700;font-size:.95rem;background:#24A68A;color:#fff;border:2px solid #24A68A;cursor:pointer;opacity:{{ enquiryButtonOpacity }}" style-hover="background:#1C8570;border-color:#1C8570">{{ enquiryButtonLabel }}</button>
           <p style="font-size:.8rem;margin-top:12px">We use your details only to respond to your inquiry about MPC programs. We do not share your information with third parties.</p>
-          <p class="form-msg" style="margin-top:14px;font-size:.9rem;font-weight:600;color:#24A68A;display:none">Thank you for contacting MPC. Our enrollment team will review your inquiry and contact you with current information about programs, schedules, requirements, and fees.</p>
+          <sc-if value="{{ enquiryMessage }}">
+            <p style="margin-top:14px;font-size:.9rem;font-weight:600;color:{{ enquiryMessageColor }}">{{ enquiryMessage }}</p>
+          </sc-if>
         </form>
       </div>
     </div>
@@ -638,10 +648,16 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
   <div style="max-width:1140px;margin:0 auto;padding:0 24px">
     <h2 style="font-size:clamp(1.5rem,3vw,2.1rem);font-weight:700;color:#1d1f20;margin:0 0 14px">Stay Informed About New Classes</h2>
     <p style="max-width:680px;margin:0 0 14px">Receive updates about new program intakes, enrollment dates, course announcements, workshops, and student opportunities.</p>
-    <form style="display:flex;gap:12px;flex-wrap:wrap;margin-top:22px;max-width:560px" onsubmit="event.preventDefault();this.querySelector('input').value='';this.querySelector('input').placeholder='Subscribed — thank you!';">
-      <input type="email" placeholder="Enter your email address" required aria-label="Email address" style="flex:1;min-width:240px;padding:13px 16px;border:1px solid #e2e5e4;background:#fff;color:#646965;border-radius:6px;font-size:.95rem">
-      <button type="submit" style="display:inline-block;padding:13px 26px;border-radius:6px;font-weight:700;font-size:.95rem;background:#24A68A;color:#fff;border:2px solid #24A68A;cursor:pointer" style-hover="background:#1C8570;border-color:#1C8570">Subscribe for Updates</button>
+    <form action="./api/newsletter.php" method="post" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:22px;max-width:560px" onsubmit="{{ submitNewsletter }}">
+      <input type="email" name="email" placeholder="Enter your email address" required aria-label="Email address" style="flex:1;min-width:240px;padding:13px 16px;border:1px solid #e2e5e4;background:#fff;color:#646965;border-radius:6px;font-size:.95rem">
+      <div style="position:absolute;left:-9999px" aria-hidden="true">
+        <label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+      </div>
+      <button type="submit" disabled="{{ newsletterSending }}" style="display:inline-block;padding:13px 26px;border-radius:6px;font-weight:700;font-size:.95rem;background:#24A68A;color:#fff;border:2px solid #24A68A;cursor:pointer;opacity:{{ newsletterButtonOpacity }}" style-hover="background:#1C8570;border-color:#1C8570">{{ newsletterButtonLabel }}</button>
     </form>
+    <sc-if value="{{ newsletterMessage }}">
+      <p style="margin-top:14px;font-size:.9rem;font-weight:600;color:{{ newsletterMessageColor }}">{{ newsletterMessage }}</p>
+    </sc-if>
     <p style="font-size:.82rem;color:#9aa09e;margin-top:14px">By subscribing you agree to receive occasional emails from MPC about programs, intakes, and student opportunities. You can unsubscribe at any time.</p>
   </div>
 </section>
@@ -684,7 +700,13 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000},&quot;showSomali&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Content&quot;},&quot;autoAdvance&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hero&quot;}}">
 class Component extends DCLogic {
-  state = { slideIndex: 0, isNarrow: false, menuOpen: false };
+  state = {
+    slideIndex: 0, isNarrow: false, menuOpen: false,
+    // Form state. `message` empty means nothing has been said to the student
+    // yet; `ok` decides whether it is said in green or in red.
+    enquirySending: false, enquiryMessage: '', enquiryOk: false,
+    newsletterSending: false, newsletterMessage: '', newsletterOk: false
+  };
 
   slides = [
     { eyebrow: 'Practical IT Training in Mogadishu', heading: 'Start Your IT Career After High School', support: 'Learn practical technology skills in one year — or choose an intensive six-month program.', imgId: 'hero-slide-0', photo: 'uploads/img1.png', placeholder: 'Photo: students working on computers in class' },
@@ -873,6 +895,80 @@ class Component extends DCLogic {
   }
   stopTimer() { if (this.timer) clearInterval(this.timer); }
 
+  // --- Forms -----------------------------------------------------------
+  // Both handlers follow the same rule as the endpoints behind them: the
+  // student is only thanked once the server confirms the submission was
+  // recorded. See api-form.js.
+
+  submitEnquiry = (event) => {
+    event.preventDefault();
+    if (this.state.enquirySending) return;   // double-click sends one enquiry
+
+    const form = event.target;
+
+    // api-form.js is a separate file, and a deploy that misses it would leave
+    // this button stuck on "Sending…" forever: the call below throws
+    // synchronously, so the .then that clears the state never runs and the
+    // student is told nothing at all. Fail the way every other path fails.
+    // The number is written out rather than read from MPC_CONTACT_PHONE
+    // because that global lives in the file we are checking for.
+    if (typeof window.mpcPostForm !== 'function') {
+      this.setState({
+        enquiryOk: false,
+        enquiryMessage: 'Sorry — this form is not working right now. Please call or WhatsApp +252 770 51 90 98.'
+      });
+      return;
+    }
+
+    this.setState({ enquirySending: true, enquiryMessage: '' });
+
+    window.mpcPostForm(form, './api/enquiry.php').then((result) => {
+      if (result.ok) {
+        // Clear the fields so a second student at the same machine does not
+        // resubmit the first one's details.
+        form.reset();
+        this.setState({
+          enquirySending: false,
+          enquiryOk: true,
+          enquiryMessage: 'Thank you for contacting MPC. Your inquiry has been received, and our enrollment team will contact you with current information about programs, schedules, requirements, and fees.'
+        });
+      } else {
+        this.setState({ enquirySending: false, enquiryOk: false, enquiryMessage: result.error });
+      }
+    });
+  };
+
+  submitNewsletter = (event) => {
+    event.preventDefault();
+    if (this.state.newsletterSending) return;
+
+    const form = event.target;
+
+    // Same guard as submitEnquiry — see the comment there.
+    if (typeof window.mpcPostForm !== 'function') {
+      this.setState({
+        newsletterOk: false,
+        newsletterMessage: 'Sorry — this form is not working right now. Please call or WhatsApp +252 770 51 90 98.'
+      });
+      return;
+    }
+
+    this.setState({ newsletterSending: true, newsletterMessage: '' });
+
+    window.mpcPostForm(form, './api/newsletter.php').then((result) => {
+      if (result.ok) {
+        form.reset();
+        this.setState({
+          newsletterSending: false,
+          newsletterOk: true,
+          newsletterMessage: 'Subscribed — thank you. We will email you about new intakes and course announcements.'
+        });
+      } else {
+        this.setState({ newsletterSending: false, newsletterOk: false, newsletterMessage: result.error });
+      }
+    });
+  };
+
   renderVals() {
     const showSomali = this.props.showSomali ?? true;
     const renderSlides = this.slides.map((s, i) => ({ ...s, opacity: i === this.state.slideIndex ? 1 : 0 }));
@@ -901,7 +997,21 @@ class Component extends DCLogic {
       outcomes: this.outcomes,
       enrollSteps: this.enrollSteps,
       requirements: this.requirements,
-      faqs
+      faqs,
+
+      submitEnquiry: this.submitEnquiry,
+      enquirySending: this.state.enquirySending,
+      enquiryButtonLabel: this.state.enquirySending ? 'Sending…' : 'Submit My Inquiry',
+      enquiryButtonOpacity: this.state.enquirySending ? '.6' : '1',
+      enquiryMessage: this.state.enquiryMessage,
+      enquiryMessageColor: this.state.enquiryOk ? '#24A68A' : '#c0392b',
+
+      submitNewsletter: this.submitNewsletter,
+      newsletterSending: this.state.newsletterSending,
+      newsletterButtonLabel: this.state.newsletterSending ? 'Subscribing…' : 'Subscribe for Updates',
+      newsletterButtonOpacity: this.state.newsletterSending ? '.6' : '1',
+      newsletterMessage: this.state.newsletterMessage,
+      newsletterMessageColor: this.state.newsletterOk ? '#24A68A' : '#c0392b'
     };
   }
 }

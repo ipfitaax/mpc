@@ -75,7 +75,17 @@ when checking anything that depends on `.htaccess`.
 The host is the Namecheap/cPanel shared account, which runs **PHP 8.4** and has
 a working mail server.
 
-1. Upload `index.html`, `assets/` and `api/` into `public_html`.
+1. Upload into `public_html`: every `.html` page, `support.js`, `image-slot.js`,
+   `api-form.js`, `assets/`, `uploads/` and `api/`.
+
+   **All three `.js` files are required, and a missing one fails quietly.**
+   `support.js` is the runtime that renders the pages — without it a visitor
+   gets a blank screen. `api-form.js` holds the form-posting logic, and if it
+   is absent the enquiry button sticks on "Sending…" rather than erroring, so
+   the page looks alive while accepting nothing. The handlers now detect that
+   and show the phone number instead, but the file still has to be there for a
+   form to actually work. This step is easy to under-do because the site has no
+   build output to copy — the repo *is* the deployment.
 2. **Create `mpc-storage/` alongside `public_html`, not inside it**, and make it
    writable. `api/shared.php` prefers that path automatically. A directory
    outside the document root cannot be requested over HTTP at all, whatever a
