@@ -87,8 +87,8 @@ names, the hidden `website` honeypot, a disabled/relabelled button while
 sending, and a message rendered green on confirmed success or red on failure.
 
 `mpc-login.html` and `mpc-forgot-password.html` have **no endpoint** — there is
-no auth code, and `database/schema.sql` is designed but unused. Their handlers
-block the submit and say plainly that nothing was sent. Do not replace those
+no auth code, and the portal tables in `database/future.sql` are unused. Their
+handlers block the submit and say plainly that nothing was sent. Do not replace those
 with a green "welcome back": a message is not a login.
 
 Note for any form added later: a string `onsubmit="…"` does not work here. The
@@ -96,9 +96,42 @@ runtime maps `onsubmit` to React's `onSubmit`, and React ignores a string
 listener, so the form falls through to a native GET submit that reloads the
 page. Bind a real handler with `onsubmit="{{ methodName }}"` instead.
 
-`database/schema.sql` is a full MySQL schema for the eventual student portal
-(users, intakes, enrolments, quizzes, payments, enquiries). It is designed but
-not yet used by any code — no PHP here connects to a database.
+## The database
+
+`database/` is split so that one file describes what exists and another holds
+what is only designed. **No table is defined in both.** When a table graduates,
+move its `CREATE TABLE` and its comments across; do not copy them.
+
+- **`ledger.sql`** — the six tables that are real: `users`, `courses`,
+  `intakes`, `enrollments`, `payments`, `login_attempts`. Run this on a fresh
+  database and you are done; it is the current state, hardening included.
+- **`future.sql`** — the other eighteen (modules, lessons, recordings, quizzes,
+  attendance, certificates, social logins, enquiries). **Nothing creates these**
+  and no PHP touches them. Kept because the reasoning in them was paid for.
+- **`migrations/001-ledger-hardening.sql`** — carries a database built from the
+  old `schema.sql` up to `ledger.sql`. Do not run it *and* `ledger.sql`.
+
+Local dev database is **`mpc_db`** on XAMPP, which is **MariaDB 10.4**, not
+MySQL. That distinction matters: `CHECK` constraints are enforced on MariaDB
+10.2+ and silently ignored on MySQL 5.7, so a constraint that works here can
+vanish on the host. Confirm what the host runs before relying on one.
+
+`payments` is **append-only** and three things enforce it, none sufficient
+alone:
+
+1. `BEFORE UPDATE` / `BEFORE DELETE` triggers raising `SIGNAL SQLSTATE '45000'`.
+2. `ON DELETE RESTRICT` on the enrolment foreign key — because **triggers do not
+   fire for deletes caused by a foreign key CASCADE**, so CASCADE would let one
+   enrolment delete silently erase a student's whole payment history.
+3. A **second database user** the app connects as, with `INSERT` and `SELECT`
+   only. `TRUNCATE` fires no trigger at all — tested, and it emptied the table
+   and reset `AUTO_INCREMENT`, after which a reversal pointed at the wrong
+   payment. Only the missing `DROP` privilege stops that.
+
+Corrections are new rows with a negative `amount` and a `reverses_payment_id`,
+so every balance is a plain `SUM(amount)` with no `CASE` anywhere. Payment ids
+are **not gapless** — a rejected insert still consumes one — so receipt
+numbering must carry its own sequence.
 
 ## Conventions
 

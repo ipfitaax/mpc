@@ -1,19 +1,26 @@
--- Mogadishu Professional Certificate — database schema
+-- Mogadishu Professional Certificate — the portal that is not built yet
 --
--- MySQL / MariaDB, InnoDB, utf8mb4. utf8mb4 is not optional: Somali names and
--- any Arabic text break under plain utf8, and a student whose name will not
--- save is a student who does not enrol.
+-- NOTHING CREATES THIS FILE'S TABLES. Do not run it against a live database
+-- expecting the application to use them; no PHP in this repo touches anything
+-- here. It is a design, kept because the reasoning in it was paid for and
+-- would be rewritten worse from memory in a year.
 --
--- Read this file top to bottom; the tables are ordered so foreign keys always
--- point at something already created.
+-- The six tables that DO exist live in `ledger.sql`. No table is defined in
+-- both files. When one of these graduates — when there is code that reads and
+-- writes it — move the CREATE TABLE and its comments across, do not copy them.
+-- Two definitions of one table is how they drift.
 --
--- WHAT THIS COVERS
---   people        users, social logins, email verification, password resets
---   catalogue     courses, intakes (cohorts), modules, lessons, recordings
---   study         enrolments, lesson progress, attendance
+-- These depend on `users`, `courses`, `intakes` and `enrollments` from
+-- ledger.sql, so that file comes first if this one is ever run.
+--
+-- WHAT IS HERE
+--   people        instructor profiles, social logins, email verification,
+--                 password resets
+--   catalogue     modules, lessons, recordings, who teaches which intake
+--   study         lesson progress, attendance
 --   assessment    quizzes, questions, options, attempts, answers
---   money         payments against an enrolment
---   admin         enquiries from the public site, login audit
+--   awards        certificates
+--   admin         enquiries from the public site, newsletter subscribers
 --
 -- WHAT IT DELIBERATELY DOES NOT COVER
 --   Video files. See the note above `recordings`.
@@ -21,46 +28,10 @@
 SET NAMES utf8mb4;
 SET time_zone = '+00:00';
 
+
 -- ===========================================================================
 -- PEOPLE
 -- ===========================================================================
-
--- Everyone who can log in: students, instructors, office staff.
---
--- One table rather than three. A person can be a student on one course and an
--- instructor on another, and splitting them means duplicating a human being
--- and then keeping two rows in sync forever.
-CREATE TABLE users (
-  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  full_name         VARCHAR(160)    NOT NULL,
-  email             VARCHAR(190)    NOT NULL,
-  phone             VARCHAR(32)     NULL,
-
-  -- NULL for accounts created purely through Google/Facebook/TikTok. Those
-  -- users have no password and must never be told their password is "wrong" —
-  -- they were never given one. The login screen checks this and points them
-  -- back to the provider they signed up with.
-  password_hash     VARCHAR(255)    NULL,
-
-  -- NULL until the student clicks the link in their email. Enrolment is
-  -- allowed before this; access to lessons and recordings is not.
-  email_verified_at DATETIME        NULL,
-
-  role              ENUM('student','instructor','staff','admin') NOT NULL DEFAULT 'student',
-  status            ENUM('active','suspended') NOT NULL DEFAULT 'active',
-
-  -- Set when a social login supplies one. Local uploads go in avatar_path.
-  avatar_url        VARCHAR(500)    NULL,
-  avatar_path       VARCHAR(255)    NULL,
-
-  last_login_at     DATETIME        NULL,
-  created_at        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_users_email (email),
-  KEY ix_users_role (role)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Instructor detail, kept out of `users` because only a handful of rows have it
 -- and the public site reads these fields on every page load.
@@ -89,6 +60,10 @@ CREATE TABLE instructor_profiles (
 -- student whose address they merely typed. Match on provider_user_id; only
 -- offer to link by email when the existing account is already verified AND
 -- the provider says the email is verified too.
+--
+-- Note `users.email` is nullable now (see ledger.sql), which sharpens this:
+-- a walk-in student recorded at the desk has no email at all, so there is
+-- nothing to match on even if you wanted to.
 CREATE TABLE social_accounts (
   id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id          BIGINT UNSIGNED NOT NULL,
@@ -137,58 +112,10 @@ CREATE TABLE password_resets (
   CONSTRAINT fk_reset_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
 -- ===========================================================================
 -- CATALOGUE
 -- ===========================================================================
-
--- A course is the thing that is taught. It is NOT a date.
-CREATE TABLE courses (
-  id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  slug            VARCHAR(120)    NOT NULL,   -- "basic-computers", matches the page URL
-  title           VARCHAR(160)    NOT NULL,
-  summary         VARCHAR(400)    NULL,
-  description     TEXT            NULL,
-  level           ENUM('beginner','intermediate','advanced') NOT NULL DEFAULT 'beginner',
-
-  -- The two pathways from the content plan, plus standalone subjects.
-  pathway         ENUM('one_year','six_month','standalone') NOT NULL DEFAULT 'standalone',
-
-  duration_weeks  SMALLINT UNSIGNED NULL,
-  fee_amount      DECIMAL(10,2)   NULL,       -- NULL means "ask the office"
-  fee_currency    CHAR(3)         NOT NULL DEFAULT 'USD',
-  hero_image      VARCHAR(255)    NULL,
-  is_published    TINYINT(1)      NOT NULL DEFAULT 0,
-  display_order   SMALLINT        NOT NULL DEFAULT 0,
-  created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_courses_slug (slug),
-  KEY ix_courses_published (is_published)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- An intake is one running of a course: a start date, a class, a teacher.
---
--- This is the table people forget, and its absence is what forces "which
--- students were in the January class?" to be answered from memory. A real
--- institute runs the same course many times; enrolments belong to a RUNNING of
--- a course, not to the course itself.
-CREATE TABLE intakes (
-  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  course_id     BIGINT UNSIGNED NOT NULL,
-  name          VARCHAR(120)    NOT NULL,   -- "January 2027 — morning"
-  starts_on     DATE            NULL,
-  ends_on       DATE            NULL,
-  schedule_note VARCHAR(255)    NULL,       -- "Sat-Wed, 08:00-10:00"
-  capacity      SMALLINT UNSIGNED NULL,
-  status        ENUM('planned','open','running','finished','cancelled') NOT NULL DEFAULT 'planned',
-  created_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-  PRIMARY KEY (id),
-  KEY ix_intakes_course (course_id),
-  KEY ix_intakes_status (status),
-  CONSTRAINT fk_intakes_course FOREIGN KEY (course_id) REFERENCES courses (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Who teaches which intake. Many-to-many: courses are often co-taught.
 CREATE TABLE intake_instructors (
@@ -262,31 +189,10 @@ CREATE TABLE recordings (
   CONSTRAINT fk_rec_lesson FOREIGN KEY (lesson_id) REFERENCES lessons (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
 -- ===========================================================================
 -- STUDY
 -- ===========================================================================
-
--- A student on one running of a course.
---
--- UNIQUE (user_id, intake_id) stops the double-enrolment that otherwise shows
--- up as one student counted twice in every report.
-CREATE TABLE enrollments (
-  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  user_id       BIGINT UNSIGNED NOT NULL,
-  intake_id     BIGINT UNSIGNED NOT NULL,
-  status        ENUM('pending','active','completed','withdrawn','cancelled') NOT NULL DEFAULT 'pending',
-  enrolled_at   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  completed_at  DATETIME        NULL,
-  fee_agreed    DECIMAL(10,2)   NULL,       -- what THIS student agreed to pay
-  fee_currency  CHAR(3)         NOT NULL DEFAULT 'USD',
-  notes         VARCHAR(500)    NULL,
-
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_enrollment (user_id, intake_id),
-  KEY ix_enroll_intake (intake_id, status),
-  CONSTRAINT fk_enroll_user   FOREIGN KEY (user_id)   REFERENCES users (id)   ON DELETE CASCADE,
-  CONSTRAINT fk_enroll_intake FOREIGN KEY (intake_id) REFERENCES intakes (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE lesson_progress (
   user_id      BIGINT UNSIGNED NOT NULL,
@@ -316,6 +222,7 @@ CREATE TABLE attendance (
   CONSTRAINT fk_att_enroll FOREIGN KEY (enrollment_id) REFERENCES enrollments (id) ON DELETE CASCADE,
   CONSTRAINT fk_att_by     FOREIGN KEY (recorded_by)   REFERENCES users (id)       ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 -- ===========================================================================
 -- ASSESSMENT
@@ -408,8 +315,9 @@ CREATE TABLE quiz_answers (
   CONSTRAINT fk_ans_option   FOREIGN KEY (option_id)   REFERENCES quiz_options (id)   ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
 -- ===========================================================================
--- CERTIFICATES AND MONEY
+-- AWARDS
 -- ===========================================================================
 
 CREATE TABLE certificates (
@@ -428,26 +336,6 @@ CREATE TABLE certificates (
   CONSTRAINT fk_cert_by     FOREIGN KEY (issued_by)     REFERENCES users (id)       ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Fee payments. Recorded by staff, not collected online: this is a cash and
--- mobile-money business, and pretending otherwise would build a checkout
--- nobody uses.
-CREATE TABLE payments (
-  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  enrollment_id BIGINT UNSIGNED NOT NULL,
-  amount        DECIMAL(10,2)   NOT NULL,
-  currency      CHAR(3)         NOT NULL DEFAULT 'USD',
-  method        ENUM('cash','evc','zaad','edahab','bank','other') NOT NULL DEFAULT 'cash',
-  reference     VARCHAR(80)     NULL,       -- mobile-money transaction id
-  paid_on       DATE            NOT NULL,
-  recorded_by   BIGINT UNSIGNED NULL,
-  note          VARCHAR(255)    NULL,
-  created_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-  PRIMARY KEY (id),
-  KEY ix_pay_enrollment (enrollment_id, paid_on),
-  CONSTRAINT fk_pay_enroll FOREIGN KEY (enrollment_id) REFERENCES enrollments (id) ON DELETE CASCADE,
-  CONSTRAINT fk_pay_by     FOREIGN KEY (recorded_by)   REFERENCES users (id)       ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ===========================================================================
 -- ADMIN
@@ -456,6 +344,10 @@ CREATE TABLE payments (
 -- Enquiries from the public site. Currently written to storage/enquiries.jsonl
 -- by api/enquiry.php; this is where they belong once the database exists, so
 -- the office can see who has been followed up and who has not.
+--
+-- This is the table most likely to graduate next. See TODOS.md item 1 — the
+-- argument that an unworked enquiry costs a whole course fee, while a disputed
+-- payment costs only the disputed amount, is worth taking seriously.
 CREATE TABLE enquiries (
   id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   full_name     VARCHAR(160)    NOT NULL,
@@ -486,25 +378,4 @@ CREATE TABLE newsletter_subscribers (
 
   PRIMARY KEY (id),
   UNIQUE KEY uq_subscriber_email (email)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Login attempts, successful and failed.
---
--- Two jobs: rate limiting (count recent failures for an email or IP before
--- allowing another try) and answering "was this account broken into". Keep it
--- for a few months, then delete — it is a log, not an archive.
-CREATE TABLE login_attempts (
-  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  email      VARCHAR(190)    NULL,
-  user_id    BIGINT UNSIGNED NULL,
-  successful TINYINT(1)      NOT NULL DEFAULT 0,
-  method     ENUM('password','google','facebook','tiktok') NOT NULL DEFAULT 'password',
-  ip         VARCHAR(45)     NULL,
-  user_agent VARCHAR(300)    NULL,
-  created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-  PRIMARY KEY (id),
-  KEY ix_login_email_time (email, created_at),
-  KEY ix_login_ip_time (ip, created_at),
-  CONSTRAINT fk_login_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

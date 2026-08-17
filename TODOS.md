@@ -12,7 +12,7 @@ actually losing why it mattered.
 `storage/enquiries.jsonl`. Move that into the `enquiries` table, and give the
 office a screen to work the list.
 
-**Why.** The table is already designed. `database/schema.sql` defines it with
+**Why.** The table is already designed. `database/future.sql` defines it with
 a `status` ENUM of `new`, `contacted`, `enrolled`, `not_interested`, a
 `handled_by` and a `handled_at`, and its own comment says plainly:
 
@@ -38,7 +38,7 @@ the ledger build is how the ledger stops shipping.
 **Depends on / blocked by.** The ledger's MySQL database and `lib/db.php`
 landing first. Do not start this before the ledger is in the office's hands.
 
-**Where to start.** Read the `enquiries` table in `database/schema.sql` and
+**Where to start.** Read the `enquiries` table in `database/future.sql` and
 `api/enquiry.php`. The migration is a one-off script reading the JSONL and
 inserting rows; the ongoing change is one line in `api/enquiry.php` to write
 to both during a transition period, then to the table alone.
