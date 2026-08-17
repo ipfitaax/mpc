@@ -16,3 +16,8 @@ Thumbs.db
 .vscode/
 *.swp
 .gstack/
+
+# Database credentials. The production copy lives above the web root; this is
+# the local-development one. lib/.htaccess denies the directory either way, but
+# a password does not belong in a repository whatever the web server thinks.
+lib/config.local.php

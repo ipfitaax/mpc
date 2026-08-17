@@ -1,0 +1,27 @@
+# Nothing in here is a page. These files are included by the scripts in admin/
+# and by verify.php; requesting one directly should never return anything.
+#
+# This matters most for config.local.php, which holds the database password in
+# local development. PHP normally executes it and outputs nothing, but "normally"
+# is doing a lot of work in that sentence: a misconfigured server, a broken
+# module after a host upgrade, or a .php handler that stops being registered all
+# turn every file here into plain text. The deny rule holds either way.
+#
+# The production credentials live ABOVE the web root (see mpc_config_path in
+# db.php), where no Apache configuration can reach them at all. This is the
+# second line, for the case where the host refuses that.
+#
+# Do NOT test this with `php -S`. The built-in server ignores .htaccess entirely
+# and will serve these files happily, making the directory look wide open when
+# Apache would return 403. Same warning as storage/ — see README.
+
+# Apache 2.4
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# Apache 2.2
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
