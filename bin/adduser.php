@@ -31,6 +31,31 @@ require_once dirname(__DIR__) . '/lib/db.php';
 
 const MIN_PASSWORD_LENGTH = 12;
 
+/**
+ * Where the login page actually is, for THIS install.
+ *
+ * This used to print a hardcoded /mpc/admin/login.php, which is correct on a
+ * local XAMPP checkout and nowhere else. Deployed into public_html/office it is
+ * a 404 - so the single instruction handed to the person who just got an
+ * account sent them to a missing page, and "the app does not work" is a fair
+ * conclusion to draw from that.
+ *
+ * There is no reliable way to learn the site's URL from the command line, so
+ * this derives the path from where the file sits rather than inventing a host,
+ * and says plainly when it cannot work it out.
+ */
+function mpc_login_url(): string
+{
+    $root = str_replace(chr(92), '/', dirname(__DIR__));
+
+    if (preg_match('~/public_html(/.*)?$~', $root, $m)) {
+        return rtrim($m[1] ?? '', '/') . '/admin/login.php';
+    }
+
+    return 'admin/login.php  (relative to wherever this site is served from)';
+}
+
+
 $opts = getopt('', ['email:', 'name:', 'role:', 'password:', 'reset', 'list', 'help']);
 
 if (isset($opts['help']) || $opts === []) {
@@ -251,7 +276,9 @@ if ($generated) {
 // Anyone who has to be told twice that a password is temporary will not change
 // it. Say it where it cannot be missed.
 if ($generated || isset($opts['password'])) {
-    echo "\n  Sign in at: /mpc/admin/login.php\n";
+    echo "
+  Sign in at: " . mpc_login_url() . "
+";
 }
 
 echo "\n";
