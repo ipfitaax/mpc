@@ -1,0 +1,22 @@
+# Command-line and cron tools. Nothing here is a page.
+#
+# selftest.php refuses to run outside the CLI on its own, but a deny rule is
+# not a duplicate of that check — it is the thing that still holds when a host
+# upgrade stops executing .php and starts serving it as text. At that moment
+# these files would otherwise hand out the shape of the backup process and the
+# paths it writes to.
+#
+# Do NOT verify this with `php -S`. The built-in server ignores .htaccess
+# entirely and will serve these happily. Use real Apache. Same warning as
+# storage/ and lib/ — see README.
+
+# Apache 2.4
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# Apache 2.2
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
