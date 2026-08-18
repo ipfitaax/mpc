@@ -92,6 +92,32 @@ a working mail server.
    future Apache config does. If the host refuses, `storage/` ships with an
    `.htaccess` that denies access — but outside is better.
 3. Send a test enquiry and confirm it arrives at `info@mpc.so`.
+4. Copy `lib/config.example.php` to `mpc-config.php` **alongside `public_html`**
+   and fill it in. Read the note in it about the restricted database user: the
+   application must not connect as the account owner, because the append-only
+   triggers do not stop `TRUNCATE` and only a missing `DROP` privilege does.
+5. Run `php bin/selftest.php --owner-user=... --owner-pass=...` and read every
+   line. It checks the things that are true locally and may not be true here:
+   whether the host grants `TRIGGER`, whether `shell_exec` is disabled, whether
+   `mysqldump` exists and whether its output contains the triggers.
+6. Create the first office account:
+   `php bin/adduser.php --email=you@mpc.so --name="Your Name" --role=admin`
+7. Schedule the backup in cPanel's Cron Jobs, once a night:
+
+   ```
+   /usr/local/bin/php /home/USER/public_html/bin/backup.php --quiet
+   ```
+
+   Then **check it actually ran.** A failure here writes to stderr and exits
+   non-zero, which cPanel emails only if you have configured it to. A backup
+   that never runs looks exactly like one that does, until the day you need it.
+   `--email=info@mpc.so` attaches a copy so success is visible too, at the cost
+   of mailing student data on a schedule; decide that deliberately.
+8. Do a restore drill before this holds a month of real payments. Restore the
+   newest dump into a scratch database and confirm the append-only triggers came
+   back with it — a `mysqldump` restore recreates tables and silently loses
+   triggers if the dump omitted them, and an append-only guarantee that
+   evaporates on first recovery is not a guarantee.
 
 ### Why the email will actually arrive
 
