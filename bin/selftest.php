@@ -111,9 +111,14 @@ try {
 
 // The .htaccess is the only thing standing between a misconfigured .php handler
 // and the database password, when the config sits inside the web root.
-is_readable(dirname(__DIR__) . '/lib/.htaccess')
-    ? pass('lib/.htaccess present', 'deny rule shipped')
-    : fail('lib/.htaccess present', 'MISSING — lib/ may be web-readable');
+// Every directory that is not a page needs its own deny rule. database/ was
+// missed until the ledger reached a real host and someone requested the URL:
+// ledger.sql was being served, locally too, for as long as it had existed.
+foreach (['lib', 'bin', 'database'] as $dir) {
+    is_readable(dirname(__DIR__) . '/' . $dir . '/.htaccess')
+        ? pass("$dir/.htaccess present", 'deny rule shipped')
+        : fail("$dir/.htaccess present", "MISSING — $dir/ may be web-readable");
+}
 
 
 // ---------------------------------------------------------------------------

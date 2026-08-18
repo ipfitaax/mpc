@@ -1,0 +1,26 @@
+# The schema is not a page.
+#
+# Serving ledger.sql hands out the full table structure, the append-only trigger
+# definitions, the seeded fee figures and the exact shape of every constraint.
+# None of that is a credential, and none of it is a secret worth much on its own
+# — but it is a map of the system drawn by the people who built it, and there is
+# no reason to publish it to anyone who guesses the path.
+#
+# This was missed until the ledger was deployed to a real host and the URL was
+# checked: lib/ and bin/ both shipped deny rules from the start and this
+# directory did not, so it had been readable the whole time, locally too.
+#
+# Do NOT verify this with `php -S`. The built-in server ignores .htaccess and
+# will serve these files happily. Use real Apache. Same warning as storage/,
+# lib/ and bin/ — see README.
+
+# Apache 2.4
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# Apache 2.2
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
