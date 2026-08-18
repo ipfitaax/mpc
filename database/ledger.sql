@@ -7,7 +7,7 @@
 -- Read this file top to bottom; the tables are ordered so foreign keys always
 -- point at something already created.
 --
--- THIS FILE IS THE DATABASE. Six tables, and they are the six the payment
+-- THIS FILE IS THE DATABASE. Seven tables, and they are the seven the payment
 -- ledger needs. If it is not here, it is not on the server.
 --
 --   users            students and office staff. One table, not two.
@@ -16,6 +16,7 @@
 --   enrollments      a student on one running of a course
 --   payments         money, append-only
 --   login_attempts   rate limiting and "was this account broken into"
+--   verify_attempts  failed public receipt lookups
 --
 -- The rest of the portal — modules, lessons, recordings, quizzes, attendance,
 -- certificates, social logins, enquiries — is designed and reasoned about in
@@ -333,6 +334,31 @@ CREATE TABLE login_attempts (
   KEY ix_login_email_time (email, created_at),
   KEY ix_login_ip_time (ip, created_at),
   CONSTRAINT fk_login_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Failed receipt lookups, for the public verify page.
+--
+-- What protects the receipt codes is their SIZE - twelve characters of a
+-- thirty-symbol alphabet is about 5.3e17 combinations - not this table. This
+-- exists because the endpoint is public and on shared hosting, where a script
+-- hammering it is a resource problem long before it is a disclosure one. Be
+-- honest about the limit: a rate limiter that queries the database still costs
+-- a query, so it slows casual probing rather than defeating a flood.
+--
+-- Only FAILED lookups are recorded. A student checking their own receipt over
+-- and over, which is what a worried person does, must never be locked out.
+--
+-- The application prunes this table itself, so it needs DELETE on it and only
+-- on it - safe in a way DELETE on payments is not, because this is a log and
+-- not money. See lib/config.example.php.
+CREATE TABLE verify_attempts (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  ip         VARCHAR(45)     NULL,
+  created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (id),
+  KEY ix_verify_ip_time (ip, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 

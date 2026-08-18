@@ -1,0 +1,19 @@
+# Pretty URL for the receipt checker.
+#
+# The code is printed on a paper slip and typed by hand, often on a phone. Every
+# character is a chance to get it wrong, and ".php" is four of them that carry no
+# meaning to the person typing. mpc.so/verify is what the receipt says, so that
+# is what has to work.
+#
+# Kept to this one rule on purpose. This site has no front controller and no
+# routing layer; a broad rewrite here would quietly change how every other file
+# is served, and the public pages depend on being served exactly as they are.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Only when the request is not already a real file or directory, so nothing
+    # that works today starts behaving differently.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^verify/?$ verify.php [L]
+</IfModule>

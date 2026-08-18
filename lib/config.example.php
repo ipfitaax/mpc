@@ -28,10 +28,15 @@
  *     GRANT SELECT, INSERT ON mpc_db.* TO 'mpc_app'@'localhost';
  *     GRANT UPDATE, DELETE ON mpc_db.users TO 'mpc_app'@'localhost';
  *     GRANT UPDATE ON mpc_db.enrollments TO 'mpc_app'@'localhost';
+ *     GRANT DELETE ON mpc_db.verify_attempts TO 'mpc_app'@'localhost';
  *     FLUSH PRIVILEGES;
  *
  * users and enrollments get UPDATE because a student's phone number and an
  * enrolment's status legitimately change. `payments` never does.
+ *
+ * verify_attempts gets DELETE so the public verify page can prune its own
+ * rate-limit log. That is safe in a way DELETE on payments is not: it is a log,
+ * not money.
  *
  * Keep the owner account for migrations and backups only.
  */
