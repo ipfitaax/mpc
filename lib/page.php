@@ -20,12 +20,25 @@
 
 declare(strict_types=1);
 
+// The nav renders a CSRF-protected sign-out form, so this needs the session
+// helpers. Both files are include-once and auth.php pulls in db.php, so a page
+// can require either one and get a working set.
+require_once __DIR__ . '/auth.php';
+
 const MPC_GREEN      = '#24A68A';
 const MPC_GREEN_DARK = '#1C8570';
 const MPC_TEXT       = '#646965';
 const MPC_HEADING    = '#1d1f20';
 const MPC_BORDER     = '#e2e5e4';
 const MPC_RED        = '#c0392b';
+
+/** Office screens, in the order they appear in the nav. Entries whose file is
+ *  not present are skipped — see mpc_page_head(). */
+const MPC_NAV = [
+    'payments.php' => 'Payments',
+    'students.php' => 'Students',
+    'intakes.php'  => 'Intakes',
+];
 
 /** Escapes for HTML. Short name because it appears on nearly every output line,
  *  and a long one is a name people skip. */
@@ -48,6 +61,13 @@ function mpc_money(string|float|int $amount, string $currency = 'USD'): string
  */
 function mpc_page_head(string $title, ?array $user = null): void
 {
+    // The logo links to the first screen that actually exists, so it is never
+    // a route to a 404 while the tool is still being built out.
+    $home = './login.php';
+    foreach (MPC_NAV as $file => $_) {
+        if (is_readable(__DIR__ . '/../admin/' . $file)) { $home = './' . $file; break; }
+    }
+
     $green = MPC_GREEN;
     $border = MPC_BORDER;
     $text = MPC_TEXT;
@@ -97,7 +117,7 @@ function mpc_page_head(string $title, ?array $user = null): void
 <header class="no-print" style="background:#fff;border-bottom:1px solid {$border};margin-bottom:26px">
   <div style="max-width:960px;margin:0 auto;padding:14px 24px;display:flex;
               align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
-    <a href="./payments.php" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit">
+    <a href="{$home}" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit">
       <span style="width:40px;height:40px;background:{$green};color:#fff;font-weight:800;
                    display:flex;align-items:center;justify-content:center;border-radius:6px">MPC</span>
       <strong style="color:{$heading}">Office</strong>
@@ -105,11 +125,30 @@ function mpc_page_head(string $title, ?array $user = null): void
 HTML;
 
     if ($user) {
+        // Only pages that exist. A nav link to a 404 in an office tool reads as
+        // "the system is broken", not "that part is not built yet". Add each
+        // entry when its screen lands.
+        $nav = [];
+        foreach (MPC_NAV as $file => $label) {
+            if (is_readable(__DIR__ . '/../admin/' . $file)) {
+                $nav[] = '<a href="./' . $file . '" style="font-weight:600;text-decoration:none">'
+                       . e($label) . '</a>';
+            }
+        }
+
+        // Sign out is a POST with a CSRF token, not a link. A GET logout can be
+        // fired by any image tag on any page a staff member opens — harmless,
+        // except when it happens mid-payment.
+        $signOut = '<form method="post" action="./logout.php" style="margin:0">'
+                 . '<input type="hidden" name="csrf" value="' . e(mpc_csrf_token()) . '">'
+                 . '<button type="submit" style="background:none;border:none;padding:0;'
+                 . 'color:' . MPC_GREEN . ';font-weight:600;font-size:.9rem;cursor:pointer">'
+                 . 'Sign out</button></form>';
+
         echo '<nav style="display:flex;align-items:center;gap:18px;font-size:.9rem">'
-           . '<a href="./payments.php" style="font-weight:600;text-decoration:none">Payments</a>'
-           . '<a href="./students.php" style="font-weight:600;text-decoration:none">Students</a>'
+           . implode('', $nav)
            . '<span class="muted">' . e($user['full_name']) . '</span>'
-           . '<a href="./logout.php" style="font-weight:600;text-decoration:none">Sign out</a>'
+           . $signOut
            . '</nav>';
     }
 
