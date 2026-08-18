@@ -40,6 +40,10 @@ $isReversal = $payment['reverses_payment_id'] !== null;
 <div class="no-print" style="margin-bottom:20px">
   <button type="button" onclick="window.print()">Print this receipt</button>
   <a href="./payments.php" style="margin-left:16px;font-weight:600">Record another payment</a>
+  <?php if (! $isReversal): ?>
+    <a href="./reverse.php?id=<?= (int) $payment['id'] ?>"
+       style="margin-left:16px;font-weight:600;color:<?= MPC_RED ?>">Reverse this payment</a>
+  <?php endif; ?>
 </div>
 
 <div class="card">

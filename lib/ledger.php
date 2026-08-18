@@ -173,6 +173,108 @@ function mpc_record_payment(array $in): int
 }
 
 /**
+ * Cancels a payment by adding its opposite.
+ *
+ * NOT AN UNDO. Nothing is deleted and nothing is edited — a reversal is a new
+ * row with a negative amount pointing at the one it cancels. Both stay on the
+ * student's history forever, which is the point: the record shows what actually
+ * happened, including the mistake and the correction, rather than a tidied
+ * version that only MPC can vouch for.
+ *
+ * WHAT IT REFUSES, and why each one matters
+ *
+ *   Already reversed  — the unique key on reverses_payment_id would catch this
+ *                       anyway, but as a raw driver error in front of a student.
+ *                       Checked first so the office gets a sentence instead.
+ *   A reversal itself — reversing a cancellation to un-cancel something is the
+ *                       kind of history nobody can read afterwards. If a
+ *                       reversal was wrong, record the payment again.
+ *   No reason         — the schema cannot enforce this (CHECK is honoured on
+ *                       MariaDB and ignored on MySQL 5.7), so it is enforced
+ *                       here. A negative row with no explanation is unreadable
+ *                       in a year, and it can never be edited to add one.
+ *
+ * Returns the new reversal's payment id.
+ */
+function mpc_reverse_payment(int $paymentId, string $reason, int $recordedBy): int
+{
+    $db = mpc_db();
+
+    $reason = trim($reason);
+    if (mb_strlen($reason) < 5) {
+        throw new InvalidArgumentException(
+            'Say why this is being reversed. It stays on the record for this '
+            . 'student permanently and cannot be edited later.'
+        );
+    }
+
+    $db->beginTransaction();
+
+    try {
+        // Locked for the duration so two staff members cannot reverse the same
+        // payment at once. The unique key would stop the second one regardless;
+        // this makes it a clean failure rather than a race.
+        $stmt = $db->prepare(
+            'SELECT p.id, p.amount, p.enrollment_id, p.paid_on, p.reverses_payment_id,
+                    (SELECT r.id FROM payments r WHERE r.reverses_payment_id = p.id) AS already
+               FROM payments p WHERE p.id = ? FOR UPDATE'
+        );
+        $stmt->execute([$paymentId]);
+        $original = $stmt->fetch();
+
+        if (! $original) {
+            throw new RuntimeException('There is no payment with that number.');
+        }
+        if ($original['reverses_payment_id'] !== null) {
+            throw new RuntimeException(
+                'That entry is already a reversal. To put the money back, record '
+                . 'the payment again rather than reversing the cancellation.'
+            );
+        }
+        if ($original['already'] !== null) {
+            throw new RuntimeException('That payment has already been reversed.');
+        }
+
+        // Dated today, not on the original's date. The reversal is a thing that
+        // happened now, and back-dating it would hide when the correction was
+        // actually made.
+        $reversalId = null;
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            try {
+                $stmt = $db->prepare(
+                    'INSERT INTO payments
+                        (enrollment_id, amount, currency, method, paid_on, recorded_by,
+                         reverses_payment_id, reversal_reason, verify_code)
+                     SELECT enrollment_id, -amount, currency, method, ?, ?, id, ?, ?
+                       FROM payments WHERE id = ?'
+                );
+                $stmt->execute([
+                    date('Y-m-d'), $recordedBy, $reason, mpc_verify_code(), $paymentId,
+                ]);
+                $reversalId = (int) $db->lastInsertId();
+                break;
+            } catch (PDOException $e) {
+                if ($e->getCode() === '23000' && str_contains($e->getMessage(), 'uq_pay_verify_code')) {
+                    continue;
+                }
+                throw $e;
+            }
+        }
+
+        if ($reversalId === null) {
+            throw new RuntimeException('Could not generate a unique receipt code.');
+        }
+
+        $db->commit();
+
+        return $reversalId;
+    } catch (Throwable $e) {
+        try { $db->rollBack(); } catch (Throwable $ignored) {}
+        throw $e;
+    }
+}
+
+/**
  * One payment with everything a receipt needs, or null.
  *
  * Read fresh from the database by id. The receipt page calls this AFTER the

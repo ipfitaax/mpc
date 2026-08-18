@@ -138,7 +138,11 @@ if ($id > 0) {
                   </td>
                   <td><code><?= e($p['verify_code']) ?></code></td>
                   <td><?= $p['recorded_by_name'] ? e($p['recorded_by_name']) : '<span class="muted">&mdash;</span>' ?></td>
-                  <td><a href="./receipt.php?id=<?= (int) $p['id'] ?>">Receipt</a></td>
+                  <td><a href="./receipt.php?id=<?= (int) $p['id'] ?>">Receipt</a>
+                      <?php if (! $isReversal): ?>
+                        <a href="./reverse.php?id=<?= (int) $p['id'] ?>"
+                           style="color:<?= MPC_RED ?>;margin-left:8px">Reverse</a>
+                      <?php endif; ?></td>
                 </tr>
               <?php endforeach; ?>
             </tbody>
