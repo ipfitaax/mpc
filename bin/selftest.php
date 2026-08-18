@@ -187,7 +187,14 @@ function dangerous_privileges_on_payments(PDO $db, string $schema): array
         }
 
         $privs = strtoupper($m[1]);
-        $scope = str_replace('`', '', $m[2]);
+        // Strip the backticks AND the backslashes. SHOW GRANTS escapes an
+        // underscore because it is a LIKE wildcard, so a database named
+        // mpcsispq_mpc comes back as `mpcsispq\_mpc`. Comparing that against
+        // SELECT DATABASE() never matched, and this function reported
+        // "nothing dangerous" for an account holding database-wide UPDATE and
+        // DELETE. Found on the real host: local development used a database
+        // with no underscore in its name, so the bug could not appear there.
+        $scope = str_replace(array('`', chr(92)), '', $m[2]);   // chr(92) is a backslash
 
         // Does this grant cover schema.payments?
         $covers = in_array($scope, ['*.*', "$schema.*", "$schema.payments"], true);
@@ -248,7 +255,11 @@ section('Backup');
 
 // Hard-fails rather than falling back, unlike mpc_storage_path(). A nightly
 // dump of every payment MPC has taken must never land inside the web root.
-$backupDir = dirname(__DIR__, 2) . '/mpc-storage';
+// `backup_dir` in the config wins. The relative default assumes the repo IS
+// public_html; deployed into a subdirectory it resolves INSIDE the web root,
+// which is the one place a dump of every payment must never land.
+$cfgBackup = @include mpc_config_path();
+$backupDir = $cfgBackup['backup_dir'] ?? (dirname(__DIR__, 2) . '/mpc-storage');
 
 if (! is_dir($backupDir)) {
     fail('backup directory exists', $backupDir . ' — bin/backup.php will abort');
@@ -273,7 +284,12 @@ if ($shellOk) {
         // not recognized as an internal or external command" echoes the name
         // back, so a substring test on it reports success when the binary is
         // absent — which it did, on the first run of this file.
-        if (preg_match('/\bVer\s+[\d.]+/i', $probe)) {
+        // Two banner shapes, and they are not the same across releases:
+        //   MariaDB 10.4  mysqldump  Ver 10.19 Distrib 10.4.32-MariaDB
+        //   MariaDB 11.4  /usr/bin/mysqldump from 11.4.12-MariaDB, client 10.19
+        // Only the first carries "Ver". Matching just that reported mysqldump
+        // as MISSING on the production host, where it is present and working.
+        if (preg_match('/Ver\s+[\d.]+|from\s+[\d.]+-|Distrib\s+[\d.]+/i', $probe)) {
             $mysqldump   = $candidate;
             $dumpVersion = trim(explode("\n", $probe)[0]);
             break;

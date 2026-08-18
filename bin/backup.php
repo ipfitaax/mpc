@@ -64,7 +64,13 @@ function die_with(string $why): never
 // ---------------------------------------------------------------------------
 // Where it goes. No fallback. See the header.
 // ---------------------------------------------------------------------------
-$dir = rtrim((string) ($opts['dir'] ?? dirname(__DIR__, 2) . '/mpc-storage'), '/\\');
+// --dir wins, then `backup_dir` in the config, then the relative default. That
+// default assumes the repo IS public_html; deployed into a subdirectory it
+// resolves INSIDE the web root, the one place a dump of every payment must
+// never land. State the path in the config for any other deployment shape.
+$cfgEarly = @include mpc_config_path();
+$dir = rtrim((string) ($opts['dir'] ?? ($cfgEarly['backup_dir'] ?? null)
+       ?? (dirname(__DIR__, 2) . '/mpc-storage')), '/' . chr(92));
 
 if (! is_dir($dir)) {
     die_with("backup directory does not exist: $dir\n"
@@ -127,7 +133,7 @@ $mysqldump = null;
 if ($shellOk && ! $forcePhp) {
     foreach (['mysqldump', '/usr/bin/mysqldump', '/usr/local/bin/mysqldump',
               'C:/xampp/mysql/bin/mysqldump.exe'] as $candidate) {
-        if (preg_match('/\bVer\s+[\d.]+/i', (string) @shell_exec(escapeshellarg($candidate) . ' --version 2>&1'))) {
+        if (preg_match('/Ver\s+[\d.]+|from\s+[\d.]+-|Distrib\s+[\d.]+/i', (string) @shell_exec(escapeshellarg($candidate) . ' --version 2>&1'))) {
             $mysqldump = $candidate;
             break;
         }
