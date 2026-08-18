@@ -148,10 +148,14 @@ CREATE TABLE intakes (
 -- up as one student counted twice in every report.
 --
 -- fee_agreed and fee_currency are per enrolment, not per intake, because MPC
--- negotiates fees individually. Whether a payment may arrive in a different
--- currency from the one agreed here is an open question for the office; what
--- is settled is that no query ever writes a bare SUM(amount) across mixed
--- currencies. Totals are single-currency by construction or grouped by it.
+-- negotiates fees individually. As of 2026-08-18 fee_currency is always 'USD'
+-- — see the note on payments.currency — so a student's balance is
+-- fee_agreed - SUM(payments.amount) with nothing to reconcile.
+--
+-- Still unanswered, and it is a question for the office rather than the desk:
+-- is fee_agreed a whole-course figure, a monthly one, or the head of an
+-- installment plan? A single column suits the first and cannot describe the
+-- third. Do not infer the answer from the column shape; ask.
 CREATE TABLE enrollments (
   id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id       BIGINT UNSIGNED NOT NULL,
@@ -205,9 +209,26 @@ CREATE TABLE payments (
   id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   enrollment_id       BIGINT UNSIGNED NOT NULL,
   amount              DECIMAL(10,2)   NOT NULL,   -- negative == a reversal
+
+  -- USD only, decided 2026-08-18. Every row is 'USD', so SUM(amount) is safe
+  -- everywhere with no grouping and no CASE.
+  --
+  -- Kept as a column rather than dropped, deliberately. It costs three bytes a
+  -- row, and dropping it would turn "accept shillings too" from a change of
+  -- policy into a migration against live financial data. Nothing enforces USD
+  -- at this layer for the same reason: a constraint would have to be removed
+  -- to ever accept anything else. The application is the enforcer.
+  --
+  -- MPC operates where USD and SOS circulate together, so cash WILL arrive as
+  -- shillings. Somebody converts at the counter, and the rate they used is not
+  -- in the ledger unless it is written down — put the original amount and rate
+  -- in `reference`. Without that, a dispute about a shilling payment becomes a
+  -- dispute about an exchange rate nobody recorded.
   currency            CHAR(3)         NOT NULL DEFAULT 'USD',
   method              ENUM('cash','evc','zaad','edahab','bank','other') NOT NULL DEFAULT 'cash',
-  reference           VARCHAR(80)     NULL,       -- mobile-money transaction id
+  reference           VARCHAR(80)     NULL,       -- mobile-money transaction id, or
+                                                  -- the original SOS amount and
+                                                  -- rate when cash was converted
   paid_on             DATE            NOT NULL,
   recorded_by         BIGINT UNSIGNED NULL,
   note                VARCHAR(255)    NULL,
