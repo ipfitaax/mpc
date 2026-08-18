@@ -151,7 +151,8 @@ $phpDay === $dbDay
 
 // Six tables, and only six. If future.sql has been loaded by accident, say so:
 // it is not harmful, but the database no longer matches what ledger.sql builds.
-$expected = ['courses', 'enrollments', 'intakes', 'login_attempts', 'payments', 'users'];
+$expected = ['courses', 'enrollments', 'intakes', 'login_attempts', 'payments',
+             'users', 'verify_attempts'];
 $tables = $db->query(
     "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()"
 )->fetchAll(PDO::FETCH_COLUMN);
