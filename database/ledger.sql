@@ -100,7 +100,17 @@ CREATE TABLE courses (
   -- The two pathways from the content plan, plus standalone subjects.
   pathway         ENUM('one_year','six_month','standalone') NOT NULL DEFAULT 'standalone',
 
-  duration_weeks  SMALLINT UNSIGNED NULL,
+  duration_weeks  SMALLINT UNSIGNED NULL,   -- what the public site advertises
+  duration_months TINYINT UNSIGNED NULL,    -- what the money is counted in
+
+  -- PER MONTH, not per course. MPC's fees are monthly: the six-month intensive
+  -- is $100/month and the one-year professional is $50/month, so both land on
+  -- $600 total. That coincidence is a pricing decision — never derive one
+  -- program's total from the other's.
+  --
+  -- months is stored rather than derived from duration_weeks because 26 weeks
+  -- to 6 months is a rounding argument, and nobody should have to have it
+  -- while a student is waiting at the desk.
   fee_amount      DECIMAL(10,2)   NULL,       -- NULL means "ask the office"
   fee_currency    CHAR(3)         NOT NULL DEFAULT 'USD',
   hero_image      VARCHAR(255)    NULL,
@@ -147,15 +157,23 @@ CREATE TABLE intakes (
 -- UNIQUE (user_id, intake_id) stops the double-enrolment that otherwise shows
 -- up as one student counted twice in every report.
 --
--- fee_agreed and fee_currency are per enrolment, not per intake, because MPC
--- negotiates fees individually. As of 2026-08-18 fee_currency is always 'USD'
--- — see the note on payments.currency — so a student's balance is
--- fee_agreed - SUM(payments.amount) with nothing to reconcile.
+-- fee_agreed is the agreed MONTHLY rate, and fee_months is how many months.
+-- Both live here rather than being read from the course because MPC negotiates
+-- individually: a student may agree a different rate or a different length, and
+-- the ledger has to show what THEY agreed, not what the brochure says. Copied
+-- from the course at enrolment, then left alone.
 --
--- Still unanswered, and it is a question for the office rather than the desk:
--- is fee_agreed a whole-course figure, a monthly one, or the head of an
--- installment plan? A single column suits the first and cannot describe the
--- third. Do not infer the answer from the column shape; ask.
+--   total owed = fee_agreed * fee_months
+--   balance    = total owed - SUM(payments.amount)
+--
+-- Two columns rather than one total, so "how many months has this student
+-- actually paid for" is answerable. That is the question the office is really
+-- asked at the desk, more often than "what is the outstanding balance".
+--
+-- A single ambiguous fee column is how a balance query ends up off by a factor
+-- of six and looks entirely normal while doing it.
+--
+-- fee_currency is always 'USD' as of 2026-08-18 — see payments.currency.
 CREATE TABLE enrollments (
   id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id       BIGINT UNSIGNED NOT NULL,
@@ -163,7 +181,8 @@ CREATE TABLE enrollments (
   status        ENUM('pending','active','completed','withdrawn','cancelled') NOT NULL DEFAULT 'pending',
   enrolled_at   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   completed_at  DATETIME        NULL,
-  fee_agreed    DECIMAL(10,2)   NULL,       -- what THIS student agreed to pay
+  fee_agreed    DECIMAL(10,2)   NULL,       -- agreed rate PER MONTH
+  fee_months    TINYINT UNSIGNED NULL,      -- how many months they agreed to
   fee_currency  CHAR(3)         NOT NULL DEFAULT 'USD',
   notes         VARCHAR(500)    NULL,
 
@@ -315,3 +334,28 @@ CREATE TABLE login_attempts (
   KEY ix_login_ip_time (ip, created_at),
   CONSTRAINT fk_login_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ===========================================================================
+-- SEED
+-- ===========================================================================
+
+-- The two programs the public site advertises, with the figures MPC gave.
+--
+-- Seeded here rather than left to an administrator because NOTHING in the
+-- application creates a course, and the payment screen cannot record anything
+-- without an intake, which cannot exist without a course. A fresh database
+-- without these rows is a tool that cannot be used at all.
+--
+-- INSERT IGNORE so re-running is safe; slug is unique.
+--
+-- Intakes are NOT seeded. An intake is a real date — "January 2027 — morning"
+-- — and inventing one would put a class in the database that does not exist.
+-- See the note in README about creating them.
+INSERT IGNORE INTO courses
+  (slug, title, pathway, duration_weeks, duration_months, fee_amount, fee_currency, is_published, display_order)
+VALUES
+  ('six-month-intensive', 'Six-Month Intensive IT Skills Program',
+   'six_month', 26, 6, 100.00, 'USD', 1, 1),
+  ('one-year-professional', 'One-Year Professional IT Skills Program',
+   'one_year', 52, 12, 50.00, 'USD', 1, 2);
