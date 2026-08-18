@@ -63,7 +63,7 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
         </div>
         <button type="submit" style="width:100%;display:inline-block;padding:13px 26px;border-radius:6px;font-weight:700;font-size:.95rem;background:#24A68A;color:#fff;border:2px solid #24A68A;cursor:pointer" style-hover="background:#1C8570;border-color:#1C8570">Log In</button>
         <sc-if value="{{ showPreviewNotice }}">
-          <p style="margin-top:14px;font-size:.9rem;font-weight:600;color:#c0392b">This is a design preview — login is not yet connected to a real account system, so nothing was submitted. To ask about enrollment, use the <a href="index.html#apply-form" style="font-weight:700">enrollment form</a> or call +252 770 51 90 98.</p>
+          <p style="margin-top:14px;font-size:.9rem;font-weight:600;color:#c0392b">Student login is not connected yet, so nothing was submitted. <strong>MPC staff:</strong> the office system is at <a href="./office/admin/login.php" style="font-weight:700">mpc.so/office</a>. To ask about enrollment, use the <a href="index.html#apply-form" style="font-weight:700">enrollment form</a> or call +252 770 51 90 98.</p>
         </sc-if>
       </form>
 
@@ -85,7 +85,25 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
         <p style="margin-top:12px;font-size:.9rem;font-weight:600;color:#c0392b">Google sign-in is not connected yet. To ask about enrollment, use the <a href="index.html#apply-form" style="font-weight:700">enrollment form</a> or call +252 770 51 90 98.</p>
       </sc-if>
 
-      <div style="border-top:1px solid #e2e5e4;margin-top:26px;padding-top:20px;text-align:center;font-size:.9rem">
+      <!-- Staff route out of here.
+           This page is the STUDENT login and has no account system behind it,
+           which is honest but unhelpful to the one group who does have accounts:
+           the office. "Log In" in the nav is the only login-shaped thing on the
+           whole site, so staff land here, try their credentials, and are told
+           nothing was submitted - which reads as broken software rather than as
+           the wrong door. It cost real time before this link existed.
+
+           The office tool being findable is not a weakness: it is password
+           protected, rate limited, and refuses any account that is not staff. -->
+      <div style="border-top:1px solid #e2e5e4;margin-top:26px;padding-top:20px;font-size:.9rem;background:#f7faf9;margin-left:-36px;margin-right:-36px;padding-left:36px;padding-right:36px;padding-bottom:18px">
+        <strong style="color:#1d1f20">MPC staff</strong>
+        <p style="margin:6px 0 0">
+          This page is for students. The office system for recording payments is at
+          <a href="./office/admin/login.php" style="font-weight:700;text-decoration:none">mpc.so/office</a>.
+        </p>
+      </div>
+
+      <div style="border-top:1px solid #e2e5e4;margin-top:20px;padding-top:20px;text-align:center;font-size:.9rem">
         New to MPC? <a href="./mpc-register.html" style="font-weight:700;text-decoration:none">Create an account</a>
       </div>
     </div>
