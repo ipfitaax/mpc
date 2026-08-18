@@ -50,6 +50,20 @@ const MPC_DB_TIME_ZONE = '+03:00';
  */
 function mpc_config_path(): string
 {
+    // An explicit override, used by the test suite so it can point at a
+    // scratch database instead of the real one. Without this the tests would
+    // run against whatever the deployed config names — which on a laptop is
+    // the development database and on a server would be the actual ledger.
+    // A test suite that can destroy production is not a test suite.
+    //
+    // It is deliberately an environment variable rather than a constant: it
+    // has to be set before this file is loaded, and it must be impossible to
+    // set from a web request.
+    $override = getenv('MPC_CONFIG');
+    if ($override !== false && $override !== '' && is_readable($override)) {
+        return $override;
+    }
+
     // Production: alongside public_html, not inside it.
     $outside = dirname(__DIR__, 2) . '/mpc-config.php';
     if (is_readable($outside)) {

@@ -133,6 +133,35 @@ so every balance is a plain `SUM(amount)` with no `CASE` anywhere. Payment ids
 are **not gapless** — a rejected insert still consumes one — so receipt
 numbering must carry its own sequence.
 
+## Tests
+
+```
+composer install          # once; PHPUnit is a dev-only dependency
+composer test             # or: vendor/bin/phpunit
+php bin/selftest.php      # the things only the server can answer
+```
+
+The suite **builds its own scratch database** (`mpc_db_test`) from
+`database/ledger.sql` on every run and refuses to touch anything else, so a
+test run cannot damage `mpc_db` or production. That also means every run
+re-verifies that `ledger.sql` still loads and still produces the triggers and
+delete rules the tests assert on.
+
+It runs as **two connections on purpose**: the restricted application user for
+everything under test, and the owner for fixtures and for asserting on things
+the application deliberately cannot see. A test that passes as owner but fails
+as the app means the grants are wrong, and that is a finding.
+
+`vendor/` is gitignored and must never be uploaded — the repo IS the
+deployment, so anything committed there would ship. Nothing in `lib/` or
+`admin/` uses composer's autoloader; every file requires what it needs
+directly.
+
+The suite has been mutation-checked. Reverting the payments foreign key to
+`ON DELETE CASCADE` fails 3 tests, removing the negative-amount guard fails 1,
+and making `months_paid` round up fails 1. A suite that passes proves nothing
+until it has been shown to fail.
+
 ## Conventions
 
 - Comments in this codebase explain *why*, often at length, and record decisions

@@ -1,0 +1,20 @@
+{
+    "name": "mpc/website",
+    "description": "Mogadishu Professional Certificate \u2014 website and payment ledger",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.6"
+    },
+    "scripts": {
+        "test": "phpunit",
+        "selftest": "php bin/selftest.php"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "_comment": "No autoload section on purpose. vendor/ is dev-only and never uploaded to the host - the repo IS the deployment - so the application must not depend on composer's autoloader to find lib/. Every file requires what it needs directly. Only the test suite loads vendor/, and only for PHPUnit."
+}

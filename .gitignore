@@ -21,3 +21,9 @@ Thumbs.db
 # the local-development one. lib/.htaccess denies the directory either way, but
 # a password does not belong in a repository whatever the web server thinks.
 lib/config.local.php
+
+# PHPUnit. Dev-only: vendor/ must never be uploaded to the host, and the repo
+# IS the deployment, so anything here would ship by accident.
+/vendor/
+.phpunit.cache/
+.phpunit.result.cache
