@@ -14,6 +14,29 @@
 <script src="./image-slot.js"></script>
 <script src="./api-form.js"></script>
 <style>
+/* The floating WhatsApp button shrinks to just its icon on a phone.
+   At 390px the labelled pill is 142px wide and sits over the contact card while
+   you read it. Nothing is permanently hidden — the page scrolls behind it, and
+   it does not cover the enquiry form's submit button, which was the one overlap
+   that would actually cost a student. But a circle is enough: the WhatsApp
+   glyph in WhatsApp green needs no caption to be understood.
+
+   A media query rather than an inline style, because inline styles cannot carry
+   breakpoints and this is the only element on the page that needs one.
+
+   TARGETED BY aria-label, NOT BY A CLASS, and that is not a style choice. The
+   dc runtime compiles `style-hover` into a generated class and REPLACES any
+   class attribute on the element with it — a `class="wa-fab"` here silently
+   became `class="scp8"` and the media query matched nothing. The aria-label is
+   already required for the button to be usable without sight, so it is a
+   selector that cannot drift away from the element it names. */
+@media (max-width: 560px) {
+  a[aria-label="Message MPC on WhatsApp"] {
+    padding: 14px !important; right: 14px !important; bottom: 14px !important;
+  }
+  a[aria-label="Message MPC on WhatsApp"] span { display: none; }
+}
+
 /* Hero slides: show the WHOLE photograph, not a crop of it.
    The slides are 1408x680 (about 2.07:1) and the hero box is 600px tall, so
    at a 1280px window the image rendered 618px high and the hero's
@@ -626,7 +649,7 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
       <div style="background:#fff;border:1px solid #e2e5e4;border-radius:6px;padding:8px 26px">
         <div style="display:flex;gap:14px;padding:16px 0;border-bottom:1px solid #e2e5e4"><div style="flex:0 0 130px;font-weight:700;color:#1d1f20;font-size:.9rem">Location</div><div style="font-size:.94rem">Soobe, Mogadishu, Somalia</div></div>
         <div style="display:flex;gap:14px;padding:16px 0;border-bottom:1px solid #e2e5e4"><div style="flex:0 0 130px;font-weight:700;color:#1d1f20;font-size:.9rem">Enrollment</div><div style="font-size:.94rem"><a href="tel:+252770519098" style="color:#24A68A;text-decoration:none">+252 770 51 90 98</a> · <a href="mailto:info@mpc.so" style="color:#24A68A;text-decoration:none">info@mpc.so</a></div></div>
-        <div style="display:flex;gap:14px;padding:16px 0;border-bottom:1px solid #e2e5e4"><div style="flex:0 0 130px;font-weight:700;color:#1d1f20;font-size:.9rem">Students</div><div style="font-size:.94rem"><a href="tel:+252770519098" style="color:#24A68A;text-decoration:none">+252 770 51 90 98</a> · <a href="mailto:student@mpc.so" style="color:#24A68A;text-decoration:none">student@mpc.so</a></div></div>
+        <div style="display:flex;gap:14px;padding:16px 0;border-bottom:1px solid #e2e5e4"><div style="flex:0 0 130px;font-weight:700;color:#1d1f20;font-size:.9rem">WhatsApp</div><div style="font-size:.94rem"><a href="https://wa.me/252770519098?text=Hello%20MPC%2C%20I%20would%20like%20to%20ask%20about%20your%20IT%20training%20programs." target="_blank" rel="noopener" style="color:#24A68A;text-decoration:none;font-weight:600">Message us on WhatsApp</a><div style="color:#9aa09e;font-size:.85rem;margin-top:2px">Usually the fastest way to reach the enrollment team.</div></div></div><div style="display:flex;gap:14px;padding:16px 0;border-bottom:1px solid #e2e5e4"><div style="flex:0 0 130px;font-weight:700;color:#1d1f20;font-size:.9rem">Students</div><div style="font-size:.94rem"><a href="tel:+252770519098" style="color:#24A68A;text-decoration:none">+252 770 51 90 98</a> · <a href="mailto:student@mpc.so" style="color:#24A68A;text-decoration:none">student@mpc.so</a></div></div>
         <div style="display:flex;gap:14px;padding:16px 0;border-bottom:1px solid #e2e5e4"><div style="flex:0 0 130px;font-weight:700;color:#1d1f20;font-size:.9rem">Office hours</div><div style="font-size:.94rem">Add confirmed days and hours before launch.</div></div>
         <div style="display:flex;gap:14px;padding:16px 0"><div style="flex:0 0 130px;font-weight:700;color:#1d1f20;font-size:.9rem">Social media</div><div style="font-size:.94rem">Add official MPC accounts only.</div></div>
       </div>
@@ -637,6 +660,7 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px">
           <a href="#apply-form" style="display:inline-block;padding:13px 26px;border-radius:6px;font-weight:700;font-size:.95rem;background:#24A68A;color:#fff;border:2px solid #24A68A;text-decoration:none" style-hover="background:#1C8570;border-color:#1C8570">Ask About Enrollment</a>
           <a href="tel:+252770519098" style="display:inline-block;padding:13px 26px;border-radius:6px;font-weight:700;font-size:.95rem;background:transparent;color:#24A68A;border:2px solid #24A68A;text-decoration:none" style-hover="background:#24A68A;color:#fff">Call MPC</a>
+          <a href="https://wa.me/252770519098?text=Hello%20MPC%2C%20I%20would%20like%20to%20ask%20about%20your%20IT%20training%20programs." target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:9px;padding:13px 26px;border-radius:6px;font-weight:700;font-size:.95rem;background:#25D366;color:#fff;border:2px solid #25D366;text-decoration:none" style-hover="background:#1DA851;border-color:#1DA851"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex:0 0 auto"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.13h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.17 8.17 0 0 1-1.26-4.36c0-4.53 3.7-8.22 8.24-8.22 2.2 0 4.27.86 5.82 2.41a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.21-8.24 8.21zm4.52-6.15c-.25-.12-1.47-.72-1.69-.8-.23-.09-.39-.13-.56.12-.16.25-.64.8-.79.97-.14.16-.29.18-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.39.11-.51.11-.11.25-.29.37-.44.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.16 0-.43.06-.66.31-.22.25-.86.85-.86 2.07s.89 2.4 1.01 2.56c.12.17 1.74 2.66 4.22 3.73.59.25 1.05.4 1.41.52.59.19 1.13.16 1.56.1.47-.07 1.47-.6 1.68-1.18.2-.58.2-1.07.14-1.18-.06-.11-.22-.17-.47-.29z"/></svg>WhatsApp</a>
         </div>
       </div>
     </div>
@@ -696,6 +720,30 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
 </footer>
 
 </div>
+
+<!-- Floating WhatsApp button.
+     WhatsApp is how a business in Mogadishu is actually reached — more than
+     email, and often more than a phone call, because it costs nothing and
+     leaves a thread both sides can scroll back through. So it gets a
+     persistent affordance rather than living only in the contact section at
+     the bottom of a long page.
+
+     WhatsApp's own green (#25D366), not the MPC green, on purpose: the colour
+     IS the recognition. Someone scanning the page should know what it is
+     without reading the label.
+
+     Inline SVG, no external request — the same rule the rest of this page
+     follows, and the reason it still renders something useful when the network
+     is poor. -->
+<a href="https://wa.me/252770519098?text=Hello%20MPC%2C%20I%20would%20like%20to%20ask%20about%20your%20IT%20training%20programs."
+   target="_blank" rel="noopener" aria-label="Message MPC on WhatsApp"
+   style="position:fixed;right:20px;bottom:20px;z-index:60;display:inline-flex;align-items:center;gap:10px;
+          padding:14px 20px;border-radius:999px;background:#25D366;color:#fff;font-weight:700;font-size:.95rem;
+          text-decoration:none;box-shadow:0 6px 20px rgba(0,0,0,.18)"
+   style-hover="background:#1DA851">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex:0 0 auto"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.13h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.17 8.17 0 0 1-1.26-4.36c0-4.53 3.7-8.22 8.24-8.22 2.2 0 4.27.86 5.82 2.41a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.21-8.24 8.21zm4.52-6.15c-.25-.12-1.47-.72-1.69-.8-.23-.09-.39-.13-.56.12-.16.25-.64.8-.79.97-.14.16-.29.18-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.39.11-.51.11-.11.25-.29.37-.44.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.16 0-.43.06-.66.31-.22.25-.86.85-.86 2.07s.89 2.4 1.01 2.56c.12.17 1.74 2.66 4.22 3.73.59.25 1.05.4 1.41.52.59.19 1.13.16 1.56.1.47-.07 1.47-.6 1.68-1.18.2-.58.2-1.07.14-1.18-.06-.11-.22-.17-.47-.29z"/></svg>
+  <span>WhatsApp</span>
+</a>
 
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000},&quot;showSomali&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Content&quot;},&quot;autoAdvance&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hero&quot;}}">
