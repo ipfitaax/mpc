@@ -78,3 +78,50 @@ build this on a hunch.
 **Where to start.** Success criterion 5 in the design doc — thirty days after
 launch, is the office still writing payments in the book? If yes, find out
 whether the reason is connectivity or something else before reaching for this.
+
+---
+
+## 3. The student portal — exercises and points
+
+**What.** Students sign in to do exercises and see their points. Not built, and
+deliberately so: premise 1 of the ledger design was "the user of v1 is MPC
+office staff, not students".
+
+**Why it is back on the table.** 2026-08-19: MPC confirmed a student has asked
+for it. That is the first demand evidence for the portal from the people who
+would use it, and it is a stronger signal than anything behind the ledger,
+which was justified on a role category ("office staff") rather than a named
+person.
+
+**What already exists.** `database/future.sql` holds the full design with its
+reasoning intact: `modules`, `lessons`, `recordings`, `lesson_progress`,
+`attendance`, `quizzes`, `quiz_questions`, `quiz_options`, `quiz_attempts`,
+`quiz_answers`, `certificates`. None are created on the server; no PHP reads
+them. `users` already carries `role`, `password_hash` and the social-login
+columns, so students are rows in a table that exists.
+
+**Pros.** The schema work is done and was paid for. `lib/auth.php` already does
+sessions, CSRF, rate limiting and password hashing, and `lib/page.php` gives the
+chrome. A student portal reuses all of it rather than starting from nothing.
+
+**Cons.** It is a bigger build than the ledger, and it is the LMS the office
+hours session cut on purpose. Eleven tables against seven.
+
+**Questions it needs answered first, and they are not technical.**
+- Who writes the exercises, and when? A quiz nobody authors is an empty screen.
+- Are exercises done in class or at home? That decides whether this needs to
+  work on a phone on a bad connection.
+- Do students have their own devices, or is it the MPC lab? Open Question in
+  README, still unanswered.
+- What is a "point" — a quiz score, attendance, both? `quiz_attempts` stores a
+  score; `attendance` is a separate table. Nothing currently combines them.
+- Which student asked, and what exactly did they say they wanted to see?
+
+**Where to start.** `/office-hours` on the student portal specifically, the same
+treatment the ledger got. Do not skip the diagnostic because the schema already
+exists - having the tables is not the same as knowing which three screens
+matter.
+
+**Depends on / blocked by.** Nothing technical. `mpc-login.html` and
+`mpc-register.html` are already built as honest placeholders and are where this
+would land.
