@@ -117,6 +117,22 @@ hours session cut on purpose. Eleven tables against seven.
   score; `attendance` is a separate table. Nothing currently combines them.
 - Which student asked, and what exactly did they say they wanted to see?
 
+**DECISION 2026-08-19: build it regardless of demand evidence.** Asked which
+student asked and what they said, MPC answered that it should be built either
+way. Recorded as a decision, not as validated demand, so nobody later reads it
+as evidence it was not.
+
+That is a legitimate call - institutions build ahead of demand - but it removes
+the check that turned a 24-table LMS into a 7-table ledger that works. The
+discipline has to come from somewhere else now, and the only remaining source
+is the wedge question: **what is the smallest version a student would open
+twice?** Not "what does the schema support". Eleven tables can become a quiz
+engine, a grades page, an attendance record or a certificate check, and those
+are four different products with four different amounts of work.
+
+Answer that before writing code, or the schema will answer it for you and the
+answer will be "all of it".
+
 **Where to start.** `/office-hours` on the student portal specifically, the same
 treatment the ledger got. Do not skip the diagnostic because the schema already
 exists - having the tables is not the same as knowing which three screens
