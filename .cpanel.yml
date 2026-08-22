@@ -1,0 +1,121 @@
+---
+# cPanel Git Version Control deployment.
+#
+# cPanel clones this repository to ~/repositories/mpc, OUTSIDE the web root, and
+# runs the tasks below when you press "Update from Remote" then "Deploy HEAD
+# Commit". That indirection is the whole point: cloning straight into
+# public_html would put .git/ inside the document root, and a readable .git is
+# the entire source history — every commit, every path, every credential ever
+# committed by mistake — handed to anyone who guesses the URL. Copying out of a
+# clone that lives above the web root cannot leak that, whatever Apache does.
+#
+# The repo IS the deployment (README), so there is no build step here. These are
+# copies, nothing more.
+#
+# WHY EACH PATH IS COPIED WITH `/.` AND INTO AN EXPLICIT TARGET:
+# `cp -a api $DEPLOYPATH` does the right thing exactly once. On the second
+# deploy $DEPLOYPATH/api already exists, so cp nests the source INSIDE it and
+# you get public_html/api/api/enquiry.php while the real endpoint quietly keeps
+# serving the old code. `cp -a api/. $DEPLOYPATH/api/` merges into the target
+# every time, first deploy and hundredth.
+#
+# WHAT IS DELIBERATELY NOT HERE:
+# - tests/, phpunit.xml, composer.json, composer.lock, vendor/ — dev only, and
+#   README is explicit that vendor/ must never reach the host.
+# - CLAUDE.md, README.md, TODOS.md, .gitattributes, .gitignore — notes to us.
+# - storage/*.jsonl — real students' names and phone numbers. They live on the
+#   server and are gitignored; nothing here writes over them.
+# - admin/, lib/, bin/, database/ — the office ledger. See the block at the
+#   bottom; it is commented out on purpose, not forgotten.
+deployment:
+  tasks:
+    - export DEPLOYPATH=$HOME/public_html
+
+    # The marketing site and the sub-pages. Every .html file is a whole page:
+    # they are client-rendered dc templates with their content inlined, so one
+    # missing file is one missing page, not a broken include.
+    - /bin/cp -a index.html $DEPLOYPATH/
+    - /bin/cp -a course-basic-ai.html $DEPLOYPATH/
+    - /bin/cp -a course-basic-computers.html $DEPLOYPATH/
+    - /bin/cp -a course-basic-python.html $DEPLOYPATH/
+    - /bin/cp -a course-computer-networking.html $DEPLOYPATH/
+    - /bin/cp -a course-cybersecurity.html $DEPLOYPATH/
+    - /bin/cp -a course-data-analysis.html $DEPLOYPATH/
+    - /bin/cp -a course-database-management.html $DEPLOYPATH/
+    - /bin/cp -a course-web-design.html $DEPLOYPATH/
+    - /bin/cp -a mpc-login.html $DEPLOYPATH/
+    - /bin/cp -a mpc-register.html $DEPLOYPATH/
+    - /bin/cp -a mpc-forgot-password.html $DEPLOYPATH/
+
+    # All three .js files are required and a missing one fails QUIETLY, which is
+    # why they are listed one by one rather than as a glob: support.js absent is
+    # a blank page, api-form.js absent leaves the enquiry button stuck on
+    # "Sending…" while the page still looks alive. A glob that silently matches
+    # two of three would reproduce exactly the bug README warns about.
+    - /bin/cp -a support.js $DEPLOYPATH/
+    - /bin/cp -a image-slot.js $DEPLOYPATH/
+    - /bin/cp -a api-form.js $DEPLOYPATH/
+
+    # verify.php and the rewrite that makes mpc.so/verify work. The receipt slip
+    # is printed with that URL on it, so the .htaccess is not optional cosmetics
+    # — without it every printed receipt points at a 404.
+    - /bin/cp -a verify.php $DEPLOYPATH/
+    - /bin/cp -a .htaccess $DEPLOYPATH/
+
+    # lib/ is already live and verify.php requires lib/db.php and lib/ledger.php
+    # at load, so it deploys with the public site rather than with the office:
+    # shipping verify.php without its library is a 500 on a URL printed on paper
+    # receipts.
+    - /bin/mkdir -p $DEPLOYPATH/assets $DEPLOYPATH/uploads $DEPLOYPATH/api $DEPLOYPATH/storage $DEPLOYPATH/lib
+    - /bin/cp -a lib/. $DEPLOYPATH/lib/
+
+    # Belt and braces on the local development database password.
+    # config.local.php is gitignored, so cPanel's clone will not contain it and
+    # this line will normally find nothing to delete. It is here because `cp -a
+    # lib/.` copies whatever is in lib/, and running these same tasks from a
+    # working tree rather than a clean clone DOES carry the file across — that
+    # is not theory, it happened on the first dry run of this file. Production
+    # keeps its credentials in mpc-config.php ABOVE public_html, so a
+    # config.local.php inside the web root is always wrong and always safe to
+    # remove.
+    - /bin/rm -f $DEPLOYPATH/lib/config.local.php
+    - /bin/cp -a assets/. $DEPLOYPATH/assets/
+    - /bin/cp -a uploads/. $DEPLOYPATH/uploads/
+    - /bin/cp -a api/. $DEPLOYPATH/api/
+
+    # ONLY the deny rule, never the .jsonl files beside it. Enquiries written on
+    # the server are the live copy; the repo has no business overwriting them.
+    # The rule is re-copied every deploy because the day it goes missing is the
+    # day storage/enquiries.jsonl is served to anyone who asks for it.
+    - /bin/cp -a storage/.htaccess $DEPLOYPATH/storage/
+
+    # ---------------------------------------------------------------------
+    # The office ledger — left out of the deploy on purpose.
+    #
+    # admin/ is measurably NOT on the host: /admin/login.php returns 404, and
+    # admin/ is the one directory here that ships no deny rule, so a 404 there
+    # can only mean the file is absent.
+    #
+    # lib/ IS on the host, whatever the probes suggest: /verify renders and
+    # answers a lookup with "No receipt", and that path requires lib/db.php and
+    # queries the ledger. Do not trust the directory probes to tell you
+    # otherwise — /lib/, /bin/ and /database/ all return 404 while /storage/
+    # returns 403 from a byte-identical deny rule, so 404-vs-403 does not
+    # distinguish "denied" from "missing" on this host. Check over SSH or in
+    # File Manager before concluding anything about those three.
+    #
+    # Do not simply uncomment these. admin/ is a public, reachable directory
+    # with no deny rule, and it needs mpc-config.php sitting ALONGSIDE
+    # public_html plus the restricted database user before it can do anything
+    # but throw a fatal error at a visitor. Work README steps 4-6 first
+    # (mpc-config.php, bin/selftest.php, bin/adduser.php), then uncomment.
+    #
+    # - /bin/mkdir -p $DEPLOYPATH/admin $DEPLOYPATH/bin $DEPLOYPATH/database
+    # - /bin/cp -a admin/. $DEPLOYPATH/admin/
+    # - /bin/cp -a bin/. $DEPLOYPATH/bin/
+    # - /bin/cp -a database/. $DEPLOYPATH/database/
+    #
+    # bin/backup.php is the one with a deadline attached: README step 7 wants it
+    # on a nightly cPanel cron, and a cron pointed at a file this deploy does not
+    # copy is a backup that never runs while looking exactly like one that does.
+    # ---------------------------------------------------------------------

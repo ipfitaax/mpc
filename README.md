@@ -75,8 +75,19 @@ when checking anything that depends on `.htaccess`.
 The host is the Namecheap/cPanel shared account, which runs **PHP 8.4** and has
 a working mail server.
 
+`.cpanel.yml` now automates step 1. cPanel's **Git Version Control** clones this
+repo above the web root and copies the files into `public_html` when you press
+*Update from Remote* then *Deploy HEAD Commit*. The file list lives there rather
+than in your memory, which is the point — step 1 is easy to under-do, and a
+missing `api-form.js` fails quietly. Set-up and the post-deploy health check are
+in `CLAUDE.md` under "Deploy Configuration". A `git push` on its own still
+changes nothing on mpc.so; the two clicks are what deploy.
+
+The steps below remain correct, and remain the fallback if the account's Git
+Version Control is unavailable:
+
 1. Upload into `public_html`: every `.html` page, `support.js`, `image-slot.js`,
-   `api-form.js`, `assets/`, `uploads/` and `api/`.
+   `api-form.js`, `assets/`, `uploads/`, `api/` and `lib/`.
 
    **All three `.js` files are required, and a missing one fails quietly.**
    `support.js` is the runtime that renders the pages — without it a visitor

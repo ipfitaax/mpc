@@ -172,6 +172,65 @@ until it has been shown to fail.
   describe MPC as an authorised provider of CCNA/CompTIA certification. See the
   end of `README.md`.
 
+## Deploy Configuration (configured by /setup-deploy)
+
+- Platform: Namecheap/cPanel shared hosting, PHP 8.4, via **cPanel Git Version
+  Control** running `.cpanel.yml`
+- Production URL: https://mpc.so (https://www.mpc.so serves the same site)
+- Deploy workflow: `.cpanel.yml` — cPanel clones this repo to
+  `~/repositories/mpc`, outside the web root, and its tasks copy files into
+  `public_html`. Nothing is built; the repo is the deployment.
+- Merge method: commits land directly on `main` (no PR flow in this repo)
+- Project type: static site plus small PHP endpoints, no build step
+
+### Custom deploy hooks
+
+- Pre-merge: `composer test` and `php bin/selftest.php` — neither runs on the
+  host, so a broken ledger only surfaces here
+- Deploy trigger: **manual, two clicks.** cPanel → Git Version Control → Manage
+  → *Update from Remote*, then *Deploy HEAD Commit*. A `git push` alone changes
+  nothing on mpc.so; that is a property of this host, not a misconfiguration.
+- Deploy status: no CLI. cPanel shows the last deployed commit SHA on the Manage
+  screen; compare it against `git rev-parse HEAD`.
+- Health check: `curl -sf https://mpc.so/` plus the checks below.
+
+### Post-deploy health check
+
+```bash
+for p in "" support.js image-slot.js api-form.js verify assets/logo.png; do
+  printf "%-16s %s\n" "/$p" "$(curl -s -o /dev/null -m 20 -w '%{http_code}' "https://mpc.so/$p")"
+done
+curl -s -o /dev/null -w 'storage deny: %{http_code}\n' https://mpc.so/storage/enquiries.jsonl
+```
+
+Everything in the first loop must be **200** and the storage line must be
+**403**. The three `.js` files are checked individually because a missing one
+fails *quietly*: no `support.js` is a blank page, no `api-form.js` leaves the
+enquiry button stuck on "Sending…" while the page still looks alive. `/verify`
+is checked because it is the URL printed on paper receipts and it requires
+`lib/`, so a 500 there means `lib/` did not deploy.
+
+Do not use a 404-vs-403 difference to decide whether a directory reached the
+host. On this host `/lib/`, `/bin/` and `/database/` all return 404 while
+`/storage/` returns 403 from a byte-identical deny rule, so the status code does
+not distinguish "denied" from "missing". Check over SSH or in File Manager.
+
+### First-time setup on the host (once)
+
+1. cPanel → **Git Version Control** → Create, clone URL
+   `https://github.com/ipfitaax/mpc.git`, path `repositories/mpc`, branch `main`.
+   Private repo: cPanel needs a deploy key or a token in the URL.
+2. Leave the repository path **outside `public_html`**. Cloning into the web
+   root publishes `.git/` — the entire source history — to anyone who guesses
+   the URL.
+3. Press *Update from Remote*, then *Deploy HEAD Commit*, then run the health
+   check above.
+
+`admin/`, `bin/` and `database/` are commented out in `.cpanel.yml`. Read the
+block at the bottom of that file before enabling them: `admin/` carries no deny
+rule and needs `mpc-config.php` above `public_html` first, or it throws a fatal
+error at a visitor.
+
 ## Skill routing
 
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
