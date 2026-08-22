@@ -80,6 +80,7 @@ function mpc_page_head(string $title, ?array $user = null): void
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{$title} — MPC Office</title>
+<link rel="icon" href="../assets/favicon.ico" sizes="any">
 <style>
   *{box-sizing:border-box}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
