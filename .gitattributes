@@ -11,6 +11,14 @@
 .htaccess   text eol=lf
 .gitignore  text eol=lf
 
+# .cpanel.yml is not just uploaded, it is EXECUTED: cPanel runs each task
+# through a shell on the host. A CRLF turns `export DEPLOYPATH=$HOME/public_html`
+# into a path with a carriage return on the end, and the copy lands somewhere
+# that is not public_html. .sql for the same family of reason — these get piped
+# into mysql on the host.
+*.yml       text eol=lf
+*.sql       text eol=lf
+
 # Binary: never touch these.
 *.png       binary
 *.jpg       binary
