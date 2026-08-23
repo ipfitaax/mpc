@@ -99,13 +99,23 @@ deployment:
     # written here can only appear after every copy above has run. Stamping
     # first would advertise a commit whose files never landed.
     #
-    # `git` is resolved rather than hardcoded because cPanel's own git lives at
-    # /usr/local/cpanel/3rdparty/bin/git on some hosts and /usr/bin/git on
-    # others; the wrong absolute path would fail the deploy at the last step.
-    # The trailing `exit 0` is what keeps that failure from doing so — an
-    # unreadable stamp is worth strictly less than a completed deploy, so on
-    # any error it records "unknown" and lets the deploy finish.
-    - /bin/sh -c 'GIT=$(command -v git || echo /usr/local/cpanel/3rdparty/bin/git); SHA=$("$GIT" rev-parse HEAD 2>/dev/null || echo unknown); printf "%s\n%s\n" "$SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DEPLOYPATH/build.txt"; exit 0'
+    # NO `/bin/sh -c` WRAPPER HERE. The first version of this wrapped the whole
+    # thing in one, and the deploy died with "/bin/sh: bad interpreter: no such
+    # file" — on this host that interpreter is not there to spawn. Note what
+    # that cost: the wrapper existed to carry an `exit 0` that would keep a
+    # failed stamp from failing the deploy, and because the wrapper was itself
+    # what failed, the guard never ran. A safety net that lives inside the
+    # thing it protects is not a safety net. These tasks already run in a
+    # shell — that is why `export DEPLOYPATH` on the first line reaches this
+    # one — so plain `||` chains do the same job with nothing to spawn.
+    #
+    # cPanel ships git at /usr/local/cpanel/3rdparty/bin/git on some hosts and
+    # /usr/bin/git on others, hence the fallback rather than one hardcoded
+    # path. Each link ends in a write, so the file is always created: on total
+    # failure it says "unknown", which is a stamp reporting that it does not
+    # know rather than a stale SHA from the last deploy quietly left in place.
+    - /usr/local/cpanel/3rdparty/bin/git rev-parse HEAD > $DEPLOYPATH/build.txt 2>/dev/null || git rev-parse HEAD > $DEPLOYPATH/build.txt 2>/dev/null || echo unknown > $DEPLOYPATH/build.txt
+    - date -u +%Y-%m-%dT%H:%M:%SZ >> $DEPLOYPATH/build.txt || true
 
     # ---------------------------------------------------------------------
     # The office ledger — left out of the deploy on purpose.

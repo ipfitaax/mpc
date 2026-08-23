@@ -205,8 +205,14 @@ for p in "" support.js image-slot.js api-form.js verify assets/logo.png; do
   printf "%-16s %s\n" "/$p" "$(curl -s -o /dev/null -m 20 -w '%{http_code}' "https://mpc.so/$p")"
 done
 curl -s -o /dev/null -w 'storage deny: %{http_code}\n' https://mpc.so/storage/enquiries.jsonl
-printf 'deployed:  %s\nlocal HEAD: %s\n' "$(curl -s -m 20 https://mpc.so/build.txt | head -1)" "$(git rev-parse HEAD)"
+printf 'deployed:   %s\nlocal HEAD: %s\n' \
+  "$(curl -sf -m 20 https://mpc.so/build.txt | head -1 || echo 'NO STAMP (see below)')" \
+  "$(git rev-parse HEAD)"
 ```
+
+`curl -sf` there is load-bearing: without `-f`, a 404 succeeds and pipes the
+host's error *page* into the comparison, so the line reads
+`deployed: <!DOCTYPE html>` instead of saying the stamp is missing.
 
 Everything in the first loop must be **200** and the storage line must be
 **403**. The three `.js` files are checked individually because a missing one
