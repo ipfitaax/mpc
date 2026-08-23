@@ -83,6 +83,13 @@ missing `api-form.js` fails quietly. Set-up and the post-deploy health check are
 in `CLAUDE.md` under "Deploy Configuration". A `git push` on its own still
 changes nothing on mpc.so; the two clicks are what deploy.
 
+Because of that, "did my change go out?" is a real question, and the deploy
+writes its own answer: the last task in `.cpanel.yml` stamps the deployed commit
+into `public_html/build.txt`, so `curl -s https://mpc.so/build.txt` reports what
+is live without a cPanel login. The manual fallback below writes no stamp — if
+you deploy by upload, `build.txt` will still name whatever commit last went out
+through cPanel.
+
 The steps below remain correct, and remain the fallback if the account's Git
 Version Control is unavailable:
 

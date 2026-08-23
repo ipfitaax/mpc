@@ -89,6 +89,24 @@ deployment:
     # day storage/enquiries.jsonl is served to anyone who asks for it.
     - /bin/cp -a storage/.htaccess $DEPLOYPATH/storage/
 
+    # The deploy stamp. Deploying here is two manual clicks in cPanel and there
+    # is no CLI, so "is mpc.so actually running the commit I pushed?" otherwise
+    # needs a browser login to read the SHA off the Manage screen. The health
+    # check cannot answer it: every file it probes returns 200 on the previous
+    # commit too. This writes the deployed SHA where curl can read it.
+    #
+    # LAST ON PURPOSE. cPanel stops on the first task that fails, so a stamp
+    # written here can only appear after every copy above has run. Stamping
+    # first would advertise a commit whose files never landed.
+    #
+    # `git` is resolved rather than hardcoded because cPanel's own git lives at
+    # /usr/local/cpanel/3rdparty/bin/git on some hosts and /usr/bin/git on
+    # others; the wrong absolute path would fail the deploy at the last step.
+    # The trailing `exit 0` is what keeps that failure from doing so — an
+    # unreadable stamp is worth strictly less than a completed deploy, so on
+    # any error it records "unknown" and lets the deploy finish.
+    - /bin/sh -c 'GIT=$(command -v git || echo /usr/local/cpanel/3rdparty/bin/git); SHA=$("$GIT" rev-parse HEAD 2>/dev/null || echo unknown); printf "%s\n%s\n" "$SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DEPLOYPATH/build.txt"; exit 0'
+
     # ---------------------------------------------------------------------
     # The office ledger — left out of the deploy on purpose.
     #

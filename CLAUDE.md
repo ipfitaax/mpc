@@ -190,8 +190,12 @@ until it has been shown to fail.
 - Deploy trigger: **manual, two clicks.** cPanel → Git Version Control → Manage
   → *Update from Remote*, then *Deploy HEAD Commit*. A `git push` alone changes
   nothing on mpc.so; that is a property of this host, not a misconfiguration.
-- Deploy status: no CLI. cPanel shows the last deployed commit SHA on the Manage
-  screen; compare it against `git rev-parse HEAD`.
+- Deploy status: no CLI, but `.cpanel.yml` stamps the deployed SHA into
+  `public_html/build.txt` as its last task, so
+  `curl -s https://mpc.so/build.txt` answers "what is live?" without a cPanel
+  login. Compare it against `git rev-parse HEAD`. cPanel's Manage screen shows
+  the same SHA and is the fallback when the stamp reads `unknown` or is absent
+  (both mean the stamp task itself did not run — see the note in `.cpanel.yml`).
 - Health check: `curl -sf https://mpc.so/` plus the checks below.
 
 ### Post-deploy health check
@@ -201,6 +205,7 @@ for p in "" support.js image-slot.js api-form.js verify assets/logo.png; do
   printf "%-16s %s\n" "/$p" "$(curl -s -o /dev/null -m 20 -w '%{http_code}' "https://mpc.so/$p")"
 done
 curl -s -o /dev/null -w 'storage deny: %{http_code}\n' https://mpc.so/storage/enquiries.jsonl
+printf 'deployed:  %s\nlocal HEAD: %s\n' "$(curl -s -m 20 https://mpc.so/build.txt | head -1)" "$(git rev-parse HEAD)"
 ```
 
 Everything in the first loop must be **200** and the storage line must be
@@ -209,6 +214,11 @@ fails *quietly*: no `support.js` is a blank page, no `api-form.js` leaves the
 enquiry button stuck on "Sending…" while the page still looks alive. `/verify`
 is checked because it is the URL printed on paper receipts and it requires
 `lib/`, so a 500 there means `lib/` did not deploy.
+
+The last two lines must match. They are the only part of this check that can
+tell a current deploy from a stale one: every status code above returns 200 on
+the previous commit just as happily as on this one, so without the stamp a
+green health check says the site is *up*, not that it is *current*.
 
 Do not use a 404-vs-403 difference to decide whether a directory reached the
 host. On this host `/lib/`, `/bin/` and `/database/` all return 404 while
