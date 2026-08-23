@@ -47,4 +47,38 @@ return [
     'name' => 'mpc_db',
     'user' => 'mpc_app',
     'pass' => '',
+
+    // -----------------------------------------------------------------------
+    // Google sign-in. OPTIONAL — leave it out and the button says so.
+    // -----------------------------------------------------------------------
+    // Omitting this key, or leaving any value blank, is a supported state:
+    // api/auth/google/start.php answers with "not switched on for this site
+    // yet" and the phone number. That is why it is absent rather than empty in
+    // most deployments, and why nothing here throws when it is missing.
+    //
+    // THE SECRET LIVES HERE AND NOWHERE ELSE. This file sits above
+    // public_html, so it cannot be requested over HTTP whatever Apache does.
+    // Never put the client secret in .html, in .js, or anywhere in the repo —
+    // the repo IS the deployment (README), so a secret committed is a secret
+    // published, and rotating it means a new one in the Google console.
+    //
+    // redirect_uri must match the "Authorised redirect URI" registered in
+    // Google Cloud Console CHARACTER FOR CHARACTER, including scheme, host,
+    // any www., and the path. A mismatch fails at Google with
+    // `redirect_uri_mismatch` and never reaches this server, so nothing in the
+    // MPC error log explains it — check the console first when sign-in dies
+    // immediately.
+    //
+    // Note mpc.so and www.mpc.so serve the same site. Register whichever one
+    // students actually land on, or register both; the browser arrives at the
+    // host it was on, not the host you prefer.
+    //
+    //   Production:  https://mpc.so/api/auth/google/callback.php
+    //   Local XAMPP: http://localhost/mpc/api/auth/google/callback.php
+    //
+    // 'google' => [
+    //     'client_id'     => '....apps.googleusercontent.com',
+    //     'client_secret' => '',
+    //     'redirect_uri'  => 'https://mpc.so/api/auth/google/callback.php',
+    // ],
 ];

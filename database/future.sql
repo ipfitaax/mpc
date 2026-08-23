@@ -5,17 +5,17 @@
 -- here. It is a design, kept because the reasoning in it was paid for and
 -- would be rewritten worse from memory in a year.
 --
--- The six tables that DO exist live in `ledger.sql`. No table is defined in
+-- The eight tables that DO exist live in `ledger.sql`. No table is defined in
 -- both files. When one of these graduates — when there is code that reads and
 -- writes it — move the CREATE TABLE and its comments across, do not copy them.
--- Two definitions of one table is how they drift.
+-- Two definitions of one table is how they drift. `social_accounts` is the
+-- worked example: it left this file the day api/auth/google started writing it.
 --
 -- These depend on `users`, `courses`, `intakes` and `enrollments` from
 -- ledger.sql, so that file comes first if this one is ever run.
 --
 -- WHAT IS HERE
---   people        instructor profiles, social logins, email verification,
---                 password resets
+--   people        instructor profiles, email verification, password resets
 --   catalogue     modules, lessons, recordings, who teaches which intake
 --   study         lesson progress, attendance
 --   assessment    quizzes, questions, options, attempts, answers
@@ -49,35 +49,10 @@ CREATE TABLE instructor_profiles (
   CONSTRAINT fk_instructor_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Google / Facebook / TikTok logins.
---
--- A separate table, not columns on `users`, so one person can link several
--- providers and still be one student. The unique key is (provider,
--- provider_user_id): that pair is what the provider guarantees is stable.
---
--- NEVER match a social login to an account by email alone. Providers can
--- return an unverified email, and trusting it lets someone sign in as a
--- student whose address they merely typed. Match on provider_user_id; only
--- offer to link by email when the existing account is already verified AND
--- the provider says the email is verified too.
---
--- Note `users.email` is nullable now (see ledger.sql), which sharpens this:
--- a walk-in student recorded at the desk has no email at all, so there is
--- nothing to match on even if you wanted to.
-CREATE TABLE social_accounts (
-  id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  user_id          BIGINT UNSIGNED NOT NULL,
-  provider         ENUM('google','facebook','tiktok') NOT NULL,
-  provider_user_id VARCHAR(191)    NOT NULL,
-  provider_email   VARCHAR(190)    NULL,
-  email_verified   TINYINT(1)      NOT NULL DEFAULT 0,
-  linked_at        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_social_provider_user (provider, provider_user_id),
-  KEY ix_social_user (user_id),
-  CONSTRAINT fk_social_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- social_accounts GRADUATED. It now lives in ledger.sql, created and used by
+-- api/auth/google. Facebook and TikTok are still only labels in its provider
+-- ENUM — no code implements them — but the table itself is real, so it is not
+-- described here any more.
 
 -- Email verification links.
 --

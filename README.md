@@ -93,8 +93,9 @@ through cPanel.
 The steps below remain correct, and remain the fallback if the account's Git
 Version Control is unavailable:
 
-1. Upload into `public_html`: every `.html` page, `support.js`, `image-slot.js`,
-   `api-form.js`, `assets/`, `uploads/`, `api/` and `lib/`.
+1. Upload into `public_html`: every `.html` page, `account.php`, `verify.php`,
+   `support.js`, `image-slot.js`, `api-form.js`, `assets/`, `uploads/`, `api/`
+   and `lib/`.
 
    **All three `.js` files are required, and a missing one fails quietly.**
    `support.js` is the runtime that renders the pages — without it a visitor
@@ -120,7 +121,24 @@ Version Control is unavailable:
    `mysqldump` exists and whether its output contains the triggers.
 6. Create the first office account:
    `php bin/adduser.php --email=you@mpc.so --name="Your Name" --role=admin`
-7. Schedule the backup in cPanel's Cron Jobs, once a night:
+7. **Optional — switch on Google sign-in.** Skipping this is a supported state:
+   the button says the feature is not switched on and gives the office phone
+   number. To enable it, create an OAuth client (type "Web application") in
+   Google Cloud Console, add `https://mpc.so/api/auth/google/callback.php` as an
+   authorised redirect URI, and put the id, secret and that same URI in the
+   `google` block of `mpc-config.php`.
+
+   Two things bite here. The redirect URI must match **character for
+   character** — a mismatch is rejected by Google before the request ever
+   reaches this server, so nothing in the MPC log explains the failure. And
+   `mpc.so` and `www.mpc.so` serve the same site, so register whichever host
+   students actually land on, or both.
+
+   Sign-in is sign-in only: it lands on `account.php`, which names the student
+   and says plainly that there is no portal yet. Staff accounts cannot be
+   reached this way at all — see the Google sign-in section in `CLAUDE.md` for
+   why that refusal is deliberate.
+8. Schedule the backup in cPanel's Cron Jobs, once a night:
 
    ```
    /usr/local/bin/php /home/USER/public_html/bin/backup.php --quiet
@@ -131,7 +149,7 @@ Version Control is unavailable:
    that never runs looks exactly like one that does, until the day you need it.
    `--email=info@mpc.so` attaches a copy so success is visible too, at the cost
    of mailing student data on a schedule; decide that deliberately.
-8. Do a restore drill before this holds a month of real payments. Restore the
+9. Do a restore drill before this holds a month of real payments. Restore the
    newest dump into a scratch database and confirm the append-only triggers came
    back with it — a `mysqldump` restore recreates tables and silently loses
    triggers if the dump omitted them, and an append-only guarantee that

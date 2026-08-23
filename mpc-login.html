@@ -74,16 +74,27 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
         <div style="flex:1;height:1px;background:#e2e5e4"></div>
       </div>
 
-      <!-- There is no OAuth flow behind this. It used to do nothing at all when
-           clicked — silently, which is the same problem the form above had.
-           Until social_accounts in database/future.sql is actually wired up,
-           say so rather than leaving the student tapping a dead button. -->
-      <button type="button" onclick="{{ showSocialNotice }}" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 20px;border-radius:6px;font-weight:600;font-size:.92rem;background:#fff;color:#1d1f20;border:1px solid #e2e5e4;cursor:pointer" style-hover="background:#f5f5f4">
+      <!-- A LINK, not a button with a handler. This leaves the page entirely:
+           the endpoint redirects to Google, Google redirects back to
+           api/auth/google/callback.php, and that sets the session. There is no
+           JavaScript in the flow at all, so it still works if support.js fails
+           to load from unpkg — which is the one dependency this page cannot
+           control. A <button> with an onclick would have thrown that away for
+           no gain.
+
+           If Google sign-in is not configured on this deployment, the endpoint
+           itself says so; that answer belongs on the server, which is the only
+           side that knows. -->
+      <a href="./api/auth/google/start.php" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 20px;border-radius:6px;font-weight:600;font-size:.92rem;background:#fff;color:#1d1f20;border:1px solid #e2e5e4;cursor:pointer;text-decoration:none" style-hover="background:#f5f5f4">
         <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.85 2.09-1.8 2.73v2.27h2.92c1.7-1.57 2.68-3.88 2.68-6.64z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.17l-2.92-2.27c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.96v2.34C2.44 15.98 5.48 18 9 18z"/><path fill="#FBBC05" d="M3.97 10.71c-.18-.54-.28-1.11-.28-1.71s.1-1.17.28-1.71V4.95H.96A8.996 8.996 0 000 9c0 1.45.35 2.83.96 4.05l3.01-2.34z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.95l3.01 2.34C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
         Continue with Google
-      </button>
-      <sc-if value="{{ socialNoticeShown }}">
-        <p style="margin-top:12px;font-size:.9rem;font-weight:600;color:#c0392b">Google sign-in is not connected yet. To ask about enrollment, use the <a href="index.html#apply-form" style="font-weight:700">enrollment form</a> or call +252 770 51 90 98.</p>
+      </a>
+
+      <!-- The callback sends the student back here with ?error=… rather than
+           rendering a failure page of its own, so the message lands on the page
+           they started from, next to the button they pressed. -->
+      <sc-if value="{{ googleError }}">
+        <p style="margin-top:12px;font-size:.9rem;font-weight:600;color:#c0392b">{{ googleError }}</p>
       </sc-if>
 
       <!-- Staff route out of here.
@@ -114,29 +125,30 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
 </x-dc>
 <script type="text/x-dc" data-dc-script>
 class Component extends DCLogic {
-  state = { showPreviewNotice: false, socialNoticeShown: false };
+  // googleError is read from the URL once, at construction. The Google callback
+  // redirects here with ?error=<message> when a sign-in could not complete, and
+  // the message is written by the server — the browser never composes one, so
+  // this page cannot invent a reason the server did not give.
+  state = {
+    showPreviewNotice: false,
+    googleError: new URLSearchParams(window.location.search).get('error') || ''
+  };
 
-  // Blocks the native submit and says plainly that nothing was sent. There is
-  // no login endpoint to post to — api/ has enquiry and newsletter only, and
-  // the portal tables in database/future.sql are unused. Do not replace this with a
-  // green "welcome back": a message is not a login.
+  // Blocks the native submit and says plainly that nothing was sent. Still true
+  // of the PASSWORD form: Google sign-in now works and has a real endpoint, but
+  // nothing accepts an email and password from a student — there is no student
+  // password anywhere in the system to check one against. Do not replace this
+  // with a green "welcome back": a message is not a login.
   submitPreview = (event) => {
     event.preventDefault();
     this.setState({ showPreviewNotice: true });
-  };
-
-  // Same honesty rule for the Google button. Its own notice, rendered directly
-  // beneath it, so the answer appears where the student clicked.
-  showSocialNotice = () => {
-    this.setState({ socialNoticeShown: true });
   };
 
   renderVals() {
     return {
       submitPreview: this.submitPreview,
       showPreviewNotice: this.state.showPreviewNotice,
-      showSocialNotice: this.showSocialNotice,
-      socialNoticeShown: this.state.socialNoticeShown
+      googleError: this.state.googleError
     };
   }
 }

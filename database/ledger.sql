@@ -7,10 +7,11 @@
 -- Read this file top to bottom; the tables are ordered so foreign keys always
 -- point at something already created.
 --
--- THIS FILE IS THE DATABASE. Seven tables, and they are the seven the payment
--- ledger needs. If it is not here, it is not on the server.
+-- THIS FILE IS THE DATABASE. Eight tables: the seven the payment ledger needs,
+-- plus the one Google sign-in needs. If it is not here, it is not on the server.
 --
 --   users            students and office staff. One table, not two.
+--   social_accounts  a Google identity linked to a user
 --   courses          the thing that is taught
 --   intakes          one running of a course
 --   enrollments      a student on one running of a course
@@ -19,7 +20,7 @@
 --   verify_attempts  failed public receipt lookups
 --
 -- The rest of the portal — modules, lessons, recordings, quizzes, attendance,
--- certificates, social logins, enquiries — is designed and reasoned about in
+-- certificates, enquiries — is designed and reasoned about in
 -- `future.sql`, and nothing creates it. That file is not dead weight: the
 -- thinking in it was paid for, and it is where those tables go when they are
 -- built. No table is defined in both files.
@@ -82,6 +83,42 @@ CREATE TABLE users (
   PRIMARY KEY (id),
   UNIQUE KEY uq_users_email (email),
   KEY ix_users_role (role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Google logins. Moved here from future.sql when api/auth/google was built;
+-- the provider ENUM keeps 'facebook' and 'tiktok' because widening an ENUM
+-- later rewrites the table, and the cost of carrying two unused labels is zero.
+--
+-- A separate table, not columns on `users`, so one person can link several
+-- providers and still be one student. The unique key is (provider,
+-- provider_user_id): that pair is what the provider guarantees is stable.
+--
+-- NEVER match a social login to an account by email alone. Providers can
+-- return an unverified email, and trusting it lets someone sign in as a
+-- student whose address they merely typed. Match on provider_user_id; only
+-- link by email when the existing account is already verified AND the provider
+-- says the email is verified too. lib/oauth.php implements exactly that, and
+-- refuses the link outright for staff and admin accounts — see the comment
+-- there, which is the one rule in this feature that is about privilege rather
+-- than identity.
+--
+-- Note `users.email` is nullable, which sharpens this: a walk-in student
+-- recorded at the desk has no email at all, so there is nothing to match on
+-- even if you wanted to.
+CREATE TABLE social_accounts (
+  id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id          BIGINT UNSIGNED NOT NULL,
+  provider         ENUM('google','facebook','tiktok') NOT NULL,
+  provider_user_id VARCHAR(191)    NOT NULL,
+  provider_email   VARCHAR(190)    NULL,
+  email_verified   TINYINT(1)      NOT NULL DEFAULT 0,
+  linked_at        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_social_provider_user (provider, provider_user_id),
+  KEY ix_social_user (user_id),
+  CONSTRAINT fk_social_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 

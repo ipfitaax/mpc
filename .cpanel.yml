@@ -56,6 +56,12 @@ deployment:
     - /bin/cp -a image-slot.js $DEPLOYPATH/
     - /bin/cp -a api-form.js $DEPLOYPATH/
 
+    # The signed-in student page. It is PHP rather than one of the .html pages
+    # above because it renders from the server's own session, which the dc
+    # runtime cannot see. Without this file a successful Google sign-in lands
+    # on a 404 — the flow works and looks broken.
+    - /bin/cp -a account.php $DEPLOYPATH/
+
     # verify.php and the rewrite that makes mpc.so/verify work. The receipt slip
     # is printed with that URL on it, so the .htaccess is not optional cosmetics
     # — without it every printed receipt points at a 404.

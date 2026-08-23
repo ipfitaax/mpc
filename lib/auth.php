@@ -123,15 +123,27 @@ function mpc_current_user(): ?array
         return null;
     }
 
-    static $user = null;
-    if ($user !== null) {
-        return $user;
+    // Cached per user id, not in a bare static.
+    //
+    // The point of the cache is one query per request rather than one per call,
+    // and a plain `static $user` delivers that — right up until a second user is
+    // looked up in the same process, at which point it hands back the first one
+    // and is confidently wrong. A web request only ever signs in one person, so
+    // production never noticed; the test suite runs many logins in one process
+    // and noticed immediately. Keying it costs nothing and removes the class of
+    // bug entirely, including the version of it that would appear the day a CLI
+    // script iterates over users.
+    static $cache = [];
+
+    $id = (int) $_SESSION['user_id'];
+    if (isset($cache[$id])) {
+        return $cache[$id];
     }
 
     $stmt = mpc_db()->prepare(
         "SELECT id, full_name, email, role, status FROM users WHERE id = ?"
     );
-    $stmt->execute([$_SESSION['user_id']]);
+    $stmt->execute([$id]);
     $found = $stmt->fetch();
 
     // A suspended account is logged out immediately rather than at next login.
@@ -143,7 +155,7 @@ function mpc_current_user(): ?array
         return null;
     }
 
-    return $user = $found;
+    return $cache[$id] = $found;
 }
 
 /** Sends anyone who is not signed-in staff to the login page. */
@@ -186,20 +198,51 @@ function mpc_login_is_rate_limited(string $email): bool
 }
 
 /** Records an attempt. Every attempt, successful or not — this is the audit
- *  trail as much as the rate limiter. */
-function mpc_log_login_attempt(string $email, ?int $userId, bool $ok): void
-{
+ *  trail as much as the rate limiter.
+ *
+ *  `$method` matches the ENUM on login_attempts. It exists so that "was this
+ *  account broken into" can be answered per route: a burst of failures against
+ *  one email means something different when they are password attempts than
+ *  when they are Google callbacks, and a single column of undifferentiated
+ *  attempts cannot tell you which you are looking at. */
+function mpc_log_login_attempt(
+    string $email,
+    ?int $userId,
+    bool $ok,
+    string $method = 'password'
+): void {
     $stmt = mpc_db()->prepare(
         "INSERT INTO login_attempts (email, user_id, successful, method, ip, user_agent)
-         VALUES (?, ?, ?, 'password', ?, ?)"
+         VALUES (?, ?, ?, ?, ?, ?)"
     );
     $stmt->execute([
         mb_substr($email, 0, 190),
         $userId,
         $ok ? 1 : 0,
+        $method,
         mpc_client_ip(),
         mb_substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 300),
     ]);
+}
+
+/**
+ * Puts a user id into the session, the one way.
+ *
+ * Both login routes end here, and the session-fixation defence is why it is one
+ * function rather than two lines copied. Without session_regenerate_id() an id
+ * set on the browser BEFORE the login still works after it, so anyone who
+ * managed to fix a session id beforehand is now signed in as that user. The
+ * password path had this from the start; the Google path must not be the one
+ * that forgets, and the way to guarantee that is to leave it nowhere to forget.
+ */
+function mpc_establish_session(int $userId): void
+{
+    mpc_session_start();
+    session_regenerate_id(true);
+    $_SESSION['user_id'] = $userId;
+
+    mpc_db()->prepare("UPDATE users SET last_login_at = NOW() WHERE id = ?")
+            ->execute([$userId]);
 }
 
 /** See the caveat in mpc_login_is_rate_limited(). */
@@ -255,11 +298,9 @@ function mpc_attempt_login(string $email, string $password): ?string
         return $generic;
     }
 
-    // New session id on privilege change. Without this, an id set before login
-    // still works after it, so anyone who managed to fix a session id on the
-    // browser beforehand is now signed in as staff.
-    session_regenerate_id(true);
-    $_SESSION['user_id'] = (int) $user['id'];
+    // New session id on privilege change, and last_login_at, both in the one
+    // helper the Google route also goes through.
+    mpc_establish_session((int) $user['id']);
 
     // Re-hash if the cost factor has moved on since this password was set.
     if (password_needs_rehash($hash, PASSWORD_DEFAULT)) {
@@ -267,8 +308,6 @@ function mpc_attempt_login(string $email, string $password): ?string
         $upd->execute([password_hash($password, PASSWORD_DEFAULT), $user['id']]);
     }
 
-    mpc_db()->prepare("UPDATE users SET last_login_at = NOW() WHERE id = ?")
-            ->execute([$user['id']]);
     mpc_log_login_attempt($email, (int) $user['id'], true);
 
     return null;

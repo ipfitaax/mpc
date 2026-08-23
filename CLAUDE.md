@@ -86,10 +86,56 @@ form in `mpc-register.html`. Each has `name` attributes matching the PHP field
 names, the hidden `website` honeypot, a disabled/relabelled button while
 sending, and a message rendered green on confirmed success or red on failure.
 
-`mpc-login.html` and `mpc-forgot-password.html` have **no endpoint** — there is
-no auth code, and the portal tables in `database/future.sql` are unused. Their
-handlers block the submit and say plainly that nothing was sent. Do not replace those
-with a green "welcome back": a message is not a login.
+The **password** form on `mpc-login.html`, and `mpc-forgot-password.html`, have
+**no endpoint** — nothing accepts a student's email and password, because no
+student has a password to check one against. Their handlers block the submit and
+say plainly that nothing was sent. Do not replace those with a green "welcome
+back": a message is not a login.
+
+## Google sign-in
+
+The one route a student *can* actually get in by. It is sign-in and nothing
+else, and the code says so out loud rather than implying more.
+
+- `api/auth/google/start.php` → Google → `api/auth/google/callback.php` →
+  `account.php`. The button is a plain `<a>`, so the flow has no JavaScript in
+  it at all and survives `support.js` failing to load from unpkg.
+- `lib/oauth.php` holds the provider half; `lib/auth.php` gained
+  `mpc_establish_session()`, which **both** login routes go through so the
+  session-fixation defence cannot be the thing the newer route forgets.
+- Credentials live in `mpc-config.php` above the web root, under a `google`
+  key. **Leaving it out is a supported state**: the endpoint answers "not
+  switched on yet" with the office phone number. Never put the client secret in
+  the repo — the repo IS the deployment.
+- The redirect URI must match Google Cloud Console character for character. A
+  mismatch fails *at Google* and never reaches this server, so nothing appears
+  in the MPC log to explain it.
+
+Three rules in there are load-bearing, each with a test that fails when removed:
+
+1. **Staff and admin accounts are unreachable by Google.** `admin/` writes an
+   append-only money ledger; letting Google in would make that ledger's
+   security the security of someone's Gmail, including its recovery flow and
+   Google's own takeover surface — none of which this project can audit.
+2. **Identity is the Google `sub`, never the email.** People change addresses;
+   matching by email either locks them out or hands their account to whoever
+   inherits it. An existing account is linked by email only when *both* sides
+   say that address is verified.
+3. **The ID token's `aud` is checked.** Without it, anyone who registers their
+   own OAuth client can present a genuine, correctly signed Google token for
+   any user and be signed in as them.
+
+The token's signature is deliberately *not* verified, and `lib/oauth.php`
+explains the bound on that: it is fetched by this server from Google's token
+endpoint over TLS, which is why the shortcut holds. If an ID token ever arrives
+from anywhere else — a JS sign-in button posting one — full JWKS verification
+becomes mandatory. `mpc_google_claims_from_code()` takes a code and never a
+token so the shape of the API keeps that honest.
+
+`account.php` is the whole signed-in area: it names the student and offers a
+sign-out, and states plainly that there is no portal behind it. Do not dress it
+up with empty dashboard cards — that is "a message is not a login" pointing the
+other way.
 
 Note for any form added later: a string `onsubmit="…"` does not work here. The
 runtime maps `onsubmit` to React's `onSubmit`, and React ignores a string
@@ -102,12 +148,16 @@ page. Bind a real handler with `onsubmit="{{ methodName }}"` instead.
 what is only designed. **No table is defined in both.** When a table graduates,
 move its `CREATE TABLE` and its comments across; do not copy them.
 
-- **`ledger.sql`** — the six tables that are real: `users`, `courses`,
-  `intakes`, `enrollments`, `payments`, `login_attempts`. Run this on a fresh
-  database and you are done; it is the current state, hardening included.
-- **`future.sql`** — the other eighteen (modules, lessons, recordings, quizzes,
-  attendance, certificates, social logins, enquiries). **Nothing creates these**
-  and no PHP touches them. Kept because the reasoning in them was paid for.
+- **`ledger.sql`** — the eight tables that are real: `users`, `social_accounts`,
+  `courses`, `intakes`, `enrollments`, `payments`, `login_attempts`,
+  `verify_attempts`. Run this on a fresh database and you are done; it is the
+  current state, hardening included.
+- **`future.sql`** — the other seventeen (modules, lessons, recordings, quizzes,
+  attendance, certificates, enquiries). **Nothing creates these** and no PHP
+  touches them. Kept because the reasoning in them was paid for.
+  `social_accounts` is the worked example of graduation: it moved to
+  `ledger.sql` the day `api/auth/google` started writing it, and `future.sql`
+  keeps only a one-line note saying where it went.
 - **`migrations/001-ledger-hardening.sql`** — carries a database built from the
   old `schema.sql` up to `ledger.sql`. Do not run it *and* `ledger.sql`.
 
@@ -205,14 +255,34 @@ for p in "" support.js image-slot.js api-form.js verify assets/logo.png; do
   printf "%-16s %s\n" "/$p" "$(curl -s -o /dev/null -m 20 -w '%{http_code}' "https://mpc.so/$p")"
 done
 curl -s -o /dev/null -w 'storage deny: %{http_code}\n' https://mpc.so/storage/enquiries.jsonl
-printf 'deployed:   %s\nlocal HEAD: %s\n' \
-  "$(curl -sf -m 20 https://mpc.so/build.txt | head -1 || echo 'NO STAMP (see below)')" \
-  "$(git rev-parse HEAD)"
+STAMP=$(curl -sf -m 20 https://mpc.so/build.txt) || STAMP='NO STAMP (build.txt did not fetch)'
+printf 'deployed:   %s\nlocal HEAD: %s\n' "$(printf '%s\n' "$STAMP" | head -1)" "$(git rev-parse HEAD)"
+
+# Google sign-in. Neither is a 200, and that is the pass condition:
+#   account.php                 302 — signed out, so it bounces to the login page.
+#                                     A 200 here means it rendered a signed-in
+#                                     page to nobody, which is the one outcome
+#                                     that must never happen.
+#   api/auth/google/start.php   302 to accounts.google.com when configured,
+#                                     503 when the config has no google block.
+#                                     500 means lib/oauth.php did not deploy.
+for p in account.php api/auth/google/start.php; do
+  printf "%-28s %s\n" "/$p" "$(curl -s -o /dev/null -m 20 -w '%{http_code}' "https://mpc.so/$p")"
+done
 ```
 
-`curl -sf` there is load-bearing: without `-f`, a 404 succeeds and pipes the
-host's error *page* into the comparison, so the line reads
-`deployed: <!DOCTYPE html>` instead of saying the stamp is missing.
+Both halves of that are load-bearing, and each replaced a version that failed
+silently:
+
+- **`curl -sf`.** Without `-f` a 404 is a *success* carrying the host's error
+  page, so the comparison printed `deployed: <!DOCTYPE html>`.
+- **The plain assignment, not `curl … | head -1 || echo`.** A pipeline's exit
+  status is the *last* command's, so `head` returning 0 swallowed curl's
+  failure and the fallback never fired — it printed an empty `deployed:` line,
+  which reads like an empty stamp rather than a missing one.
+
+The shape to keep: capture first, test the capture, then format. Anything that
+tests a pipeline is testing the wrong command.
 
 Everything in the first loop must be **200** and the storage line must be
 **403**. The three `.js` files are checked individually because a missing one

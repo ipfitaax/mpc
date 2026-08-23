@@ -168,6 +168,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/ledger.php';
+require_once __DIR__ . '/../lib/oauth.php';
 
 /** The owner connection, for fixtures and for asserting on things the app cannot see. */
 function test_owner(): PDO
