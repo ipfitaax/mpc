@@ -29,7 +29,28 @@
 #   bottom; it is commented out on purpose, not forgotten.
 deployment:
   tasks:
-    - export DEPLOYPATH=$HOME/public_html
+    # NOT $HOME/public_html. mpc.so is served from public_html/mpc.so, and for
+    # the life of this file DEPLOYPATH pointed one level above it — so every
+    # deploy copied the whole site into a directory nothing serves, reported
+    # success, and changed nothing on the live site.
+    #
+    # It cost three delivery attempts to find, because every symptom pointed at
+    # the deploy not running rather than at it landing elsewhere. Note in
+    # particular that build.txt — added precisely to answer "is the live site
+    # current?" — could not answer it here: it was being written to
+    # ~/public_html/build.txt, so mpc.so/build.txt returned 404, which is
+    # exactly what it would return if the task had never run. The one signal
+    # designed to distinguish those two cases could not distinguish them,
+    # because the signal was written through the same broken variable as
+    # everything it was reporting on.
+    #
+    # The lesson worth keeping: a deploy that reports success and a deploy that
+    # changed the served site are different claims, and nothing in cPanel's
+    # output tells them apart. Only fetching a file over HTTP does.
+    #
+    # If the document root ever moves, this line moves with it. Read it from
+    # cPanel → Domains → Document Root; do not assume the cPanel default.
+    - export DEPLOYPATH=$HOME/public_html/mpc.so
 
     # The marketing site and the sub-pages. Every .html file is a whole page:
     # they are client-rendered dc templates with their content inlined, so one
