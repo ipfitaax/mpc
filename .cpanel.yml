@@ -29,28 +29,63 @@
 #   bottom; it is commented out on purpose, not forgotten.
 deployment:
   tasks:
-    # NOT $HOME/public_html. mpc.so is served from public_html/mpc.so, and for
-    # the life of this file DEPLOYPATH pointed one level above it — so every
-    # deploy copied the whole site into a directory nothing serves, reported
-    # success, and changed nothing on the live site.
+    # RESOLVE the document root; do not assert it.
     #
-    # It cost three delivery attempts to find, because every symptom pointed at
-    # the deploy not running rather than at it landing elsewhere. Note in
-    # particular that build.txt — added precisely to answer "is the live site
-    # current?" — could not answer it here: it was being written to
-    # ~/public_html/build.txt, so mpc.so/build.txt returned 404, which is
-    # exactly what it would return if the task had never run. The one signal
-    # designed to distinguish those two cases could not distinguish them,
-    # because the signal was written through the same broken variable as
-    # everything it was reporting on.
+    # This line has now been wrong twice, in opposite directions, and each time
+    # the deploy reported success while changing nothing on mpc.so. First it was
+    # $HOME/public_html; then it was "fixed" to $HOME/public_html/mpc.so on the
+    # strength of a guess, and that was wrong too — mpc.so/mpc.so/index.html is
+    # a 404, so the files were landing outside the served tree either way.
     #
-    # The lesson worth keeping: a deploy that reports success and a deploy that
-    # changed the served site are different claims, and nothing in cPanel's
-    # output tells them apart. Only fetching a file over HTTP does.
+    # Note in particular what the first miss cost. build.txt was added precisely
+    # to answer "is the live site current?", and it could not answer it: it was
+    # being written to ~/public_html/build.txt, so mpc.so/build.txt returned 404
+    # — exactly what it returns when the task never ran. The one signal designed
+    # to tell those two cases apart was written through the same broken variable
+    # as everything it was reporting on.
     #
-    # If the document root ever moves, this line moves with it. Read it from
-    # cPanel → Domains → Document Root; do not assume the cPanel default.
-    - export DEPLOYPATH=$HOME/public_html/mpc.so
+    # Two hardcoded guesses and two silent no-op deploys is enough. A path that
+    # has to match a server setting nobody here can see is not a constant, so it
+    # stops being written as one. The three steps below ask the host, then look,
+    # then fall back — and the guard after them refuses to continue on a
+    # directory that does not exist, which is the part that was missing.
+    #
+    # 1. cPanel's own answer. /var/cpanel/userdata/$USER/mpc.so carries the
+    #    domain's `documentroot:` and is the same value the Domains screen
+    #    shows. When it is readable this is not a heuristic at all.
+    - export DEPLOYPATH=$(awk '/^documentroot:/ {print $2}' /var/cpanel/userdata/$USER/mpc.so 2>/dev/null)
+
+    # 2. Failing that, find the tree already being served. office/ is the office
+    #    tool's directory, created by hand on this host and NOT by this file —
+    #    mpc-login.html links staff to mpc.so/office and that URL answers 200,
+    #    so whatever directory contains office/ is the document root. The clone
+    #    is excluded by path because it must never match itself; the repo has no
+    #    office/ of its own today, and -not -path keeps that from mattering if
+    #    it ever grows one.
+    - test -n "$DEPLOYPATH" || export DEPLOYPATH=$(find $HOME -maxdepth 4 -type d -name office -not -path "*/repositories/*" -printf '%h\n' 2>/dev/null | head -1)
+
+    # 3. Last resort, the cPanel default.
+    - test -n "$DEPLOYPATH" || export DEPLOYPATH=$HOME/public_html
+
+    # No colon-space in this string, deliberately. These tasks are YAML plain
+    # scalars, and `- echo "mpc deploy: X"` parses as a MAPPING whose key is
+    # `echo "mpc deploy` — cPanel then runs something that is not this command,
+    # or rejects the file outright. Cheap to avoid, invisible when it bites.
+    - echo "mpc deploy DEPLOYPATH=$DEPLOYPATH"
+
+    # THE GUARD, and the whole point of the rewrite above.
+    #
+    # cPanel stops on the first task that fails, so a bare `test -d` ends the
+    # deploy with a visible failure when the root cannot be resolved. That is
+    # strictly better than what happened twice: every cp below "succeeding" into
+    # a directory cp had just created out of thin air, and cPanel printing a
+    # clean green result for a deploy that moved nothing.
+    #
+    # Note what this still cannot catch — a directory that exists and is not the
+    # one Apache serves. Nothing running inside the host can catch that. Only
+    # fetching a file over HTTP can, which is why build.txt is stamped last and
+    # why the health check in CLAUDE.md compares it against HEAD.
+    - test -d "$DEPLOYPATH"
 
     # The marketing site and the sub-pages. Every .html file is a whole page:
     # they are client-rendered dc templates with their content inlined, so one
