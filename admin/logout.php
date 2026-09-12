@@ -11,8 +11,12 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/lib/auth.php';
 
+// A GET lands on the login page, NOT on ./intakes.php as it used to. That page
+// admits staff and admin only, so for an instructor the old destination was a
+// bounce straight back here — and login.php already knows how to send each role
+// somewhere it can actually open.
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: ./intakes.php');
+    header('Location: ./login.php');
     exit;
 }
 

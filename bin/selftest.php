@@ -154,9 +154,16 @@ $phpDay === $dbDay
     ? pass('PHP and MySQL agree on the hour', $dbDay)
     : fail('PHP and MySQL agree on the hour', "php=$phpDay mysql=$dbDay");
 
-// Six tables, and only six. If future.sql has been loaded by accident, say so:
-// it is not harmful, but the database no longer matches what ledger.sql builds.
-$expected = ['courses', 'enrollments', 'intakes', 'login_attempts', 'payments',
+// Fourteen tables, and only fourteen. If future.sql has been loaded by accident,
+// say so: it is not harmful in itself, but the database no longer matches what
+// ledger.sql builds — and for the six assessment tables it is actively
+// misleading, because future.sql creates them in the OLD shape. A database in
+// that state loads the quiz screens and then dies with "Unknown column
+// 'created_by'" on the first save. See migrations/004-assessment.sql, which
+// opens with how to check for and clear exactly that.
+$expected = ['courses', 'enrollments', 'intakes', 'intake_instructors',
+             'login_attempts', 'payments', 'quizzes', 'quiz_answers',
+             'quiz_attempts', 'quiz_options', 'quiz_questions',
              'social_accounts', 'users', 'verify_attempts'];
 $tables = $db->query(
     "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()"
@@ -178,12 +185,16 @@ section('Append-only enforcement');
 // ---------------------------------------------------------------------------
 
 /**
- * Reads this connection's own grants and decides whether it could damage the
- * payments table. Nothing destructive is attempted — see the note at the top.
+ * Reads this connection's own grants and decides whether it could damage a
+ * given table. Nothing destructive is attempted — see the note at the top.
+ *
+ * $risky is passed in rather than fixed, because the answer differs per table.
+ * `payments` must not be UPDATE-able at all. `quiz_attempts` must be — the
+ * score is written by an UPDATE at submission — while DELETE on it is exactly
+ * as forbidden. A single hardcoded list could only be right for one of them.
  */
-function dangerous_privileges_on_payments(PDO $db, string $schema): array
+function dangerous_privileges_on(PDO $db, string $schema, string $table, array $risky): array
 {
-    $risky = ['UPDATE', 'DELETE', 'DROP', 'ALTER', 'ALL PRIVILEGES'];
     $found = [];
 
     foreach ($db->query('SHOW GRANTS FOR CURRENT_USER()')->fetchAll(PDO::FETCH_COLUMN) as $line) {
@@ -201,8 +212,8 @@ function dangerous_privileges_on_payments(PDO $db, string $schema): array
         // with no underscore in its name, so the bug could not appear there.
         $scope = str_replace(array('`', chr(92)), '', $m[2]);   // chr(92) is a backslash
 
-        // Does this grant cover schema.payments?
-        $covers = in_array($scope, ['*.*', "$schema.*", "$schema.payments"], true);
+        // Does this grant cover schema.$table?
+        $covers = in_array($scope, ['*.*', "$schema.*", "$schema.$table"], true);
         if (! $covers) {
             continue;
         }
@@ -221,7 +232,9 @@ function dangerous_privileges_on_payments(PDO $db, string $schema): array
 }
 
 $schema = (string) $db->query('SELECT DATABASE()')->fetchColumn();
-$risky  = dangerous_privileges_on_payments($db, $schema);
+$risky  = dangerous_privileges_on(
+    $db, $schema, 'payments', ['UPDATE', 'DELETE', 'DROP', 'ALTER', 'ALL PRIVILEGES']
+);
 
 // THE decisive check. TRUNCATE fires no trigger, so without a restricted user
 // the append-only guarantee is decoration. Tested: TRUNCATE silently emptied
@@ -230,6 +243,30 @@ $risky  = dangerous_privileges_on_payments($db, $schema);
 $risky
     ? fail('app user cannot damage payments', implode('; ', $risky))
     : pass('app user cannot damage payments', 'no UPDATE/DELETE/DROP/ALTER in scope');
+
+// The same question about grades. A quiz_attempts row is the record that a named
+// student sat an exam and scored what they scored, and the application creates
+// one but must never be able to destroy one.
+//
+// UPDATE is absent from the risky list on purpose and is not an oversight: the
+// score columns are written by an UPDATE at submission, so an app that cannot
+// UPDATE this table cannot mark anything. DELETE is what must not be there.
+//
+// Weaker than the payments check by design — there is no trigger behind it, so
+// the owner can still delete an attempt. A mistaken grade is a smaller
+// emergency than a mistaken payment, and the grant is what stops the
+// application doing it by accident, which is the failure that actually happens.
+if (in_array('quiz_attempts', $tables, true)) {
+    $riskyGrades = dangerous_privileges_on(
+        $db, $schema, 'quiz_attempts', ['DELETE', 'DROP', 'ALTER', 'ALL PRIVILEGES']
+    );
+
+    $riskyGrades
+        ? fail('app user cannot delete a grade', implode('; ', $riskyGrades))
+        : pass('app user cannot delete a grade', 'no DELETE/DROP/ALTER in scope');
+} else {
+    skip('app user cannot delete a grade', 'quiz_attempts not present');
+}
 
 // Triggers need the TRIGGER privilege even to be SEEN, which the app user
 // deliberately lacks. Without owner credentials this is unanswerable, and

@@ -32,13 +32,48 @@ const MPC_HEADING    = '#1d1f20';
 const MPC_BORDER     = '#e2e5e4';
 const MPC_RED        = '#c0392b';
 
-/** Office screens, in the order they appear in the nav. Entries whose file is
- *  not present are skipped — see mpc_page_head(). */
+/**
+ * Office screens, in the order they appear in the nav: file => [label, roles].
+ *
+ * Entries whose file is not present are skipped — see mpc_page_head().
+ *
+ * THE ROLE LIST IS NOT DECORATION, and it is not the access check either. The
+ * check is the mpc_require_* call on the first line of each screen; this list
+ * is what stops the nav OFFERING a link that check will refuse. Those are two
+ * different jobs and both are needed: without the check the nav is the security,
+ * and without the list an instructor sees "Payments", clicks it, and is bounced
+ * to a login page while already logged in — which reads as a broken system
+ * rather than as a closed door.
+ *
+ * Keep the two in step. A screen added here with the wrong roles is a link that
+ * lies; a screen added here that forgets its own require call is a screen with
+ * no door at all.
+ */
 const MPC_NAV = [
-    'payments.php' => 'Payments',
-    'students.php' => 'Students',
-    'intakes.php'  => 'Intakes',
+    'payments.php' => ['Payments', ['staff', 'admin']],
+    'students.php' => ['Students', ['staff', 'admin']],
+    'intakes.php'  => ['Intakes',  ['staff', 'admin']],
+    'quizzes.php'  => ['Quizzes',  ['instructor', 'staff', 'admin']],
 ];
+
+/** The nav entries this user may actually open, as file => label. */
+function mpc_nav_for(?array $user): array
+{
+    if (! $user) {
+        return [];
+    }
+
+    $out = [];
+
+    foreach (MPC_NAV as $file => [$label, $roles]) {
+        if (in_array($user['role'], $roles, true)
+            && is_readable(__DIR__ . '/../admin/' . $file)) {
+            $out[$file] = $label;
+        }
+    }
+
+    return $out;
+}
 
 /** Escapes for HTML. Short name because it appears on nearly every output line,
  *  and a long one is a name people skip. */
@@ -61,12 +96,12 @@ function mpc_money(string|float|int $amount, string $currency = 'USD'): string
  */
 function mpc_page_head(string $title, ?array $user = null): void
 {
-    // The logo links to the first screen that actually exists, so it is never
-    // a route to a 404 while the tool is still being built out.
-    $home = './login.php';
-    foreach (MPC_NAV as $file => $_) {
-        if (is_readable(__DIR__ . '/../admin/' . $file)) { $home = './' . $file; break; }
-    }
+    // The logo links to the first screen that actually exists AND that this
+    // user may open, so it is never a route to a 404 while the tool is still
+    // being built out, and never a route to a redirect for an instructor whose
+    // first screen is not the payments desk.
+    $nav  = mpc_nav_for($user);
+    $home = $nav === [] ? './login.php' : './' . array_key_first($nav);
 
     $green = MPC_GREEN;
     $border = MPC_BORDER;
@@ -126,15 +161,15 @@ function mpc_page_head(string $title, ?array $user = null): void
 HTML;
 
     if ($user) {
-        // Only pages that exist. A nav link to a 404 in an office tool reads as
-        // "the system is broken", not "that part is not built yet". Add each
-        // entry when its screen lands.
-        $nav = [];
-        foreach (MPC_NAV as $file => $label) {
-            if (is_readable(__DIR__ . '/../admin/' . $file)) {
-                $nav[] = '<a href="./' . $file . '" style="font-weight:600;text-decoration:none">'
-                       . e($label) . '</a>';
-            }
+        // Only pages that exist, and only the ones this role may open. A nav
+        // link to a 404 in an office tool reads as "the system is broken", not
+        // "that part is not built yet"; a nav link that bounces you to a login
+        // screen you are already past reads the same way. Add each entry to
+        // MPC_NAV when its screen lands.
+        $links = [];
+        foreach ($nav as $file => $label) {
+            $links[] = '<a href="./' . $file . '" style="font-weight:600;text-decoration:none">'
+                     . e($label) . '</a>';
         }
 
         // Sign out is a POST with a CSRF token, not a link. A GET logout can be
@@ -147,7 +182,7 @@ HTML;
                  . 'Sign out</button></form>';
 
         echo '<nav style="display:flex;align-items:center;gap:18px;font-size:.9rem">'
-           . implode('', $nav)
+           . implode('', $links)
            . '<span class="muted">' . e($user['full_name']) . '</span>'
            . $signOut
            . '</nav>';

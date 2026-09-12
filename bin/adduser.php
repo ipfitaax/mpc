@@ -27,7 +27,9 @@ if (PHP_SAPI !== 'cli') {
     exit("bin/adduser.php is a command-line tool.\n");
 }
 
-require_once dirname(__DIR__) . '/lib/db.php';
+// auth.php, not just db.php: MPC_OFFICE_ROLES lives there and is what decides
+// which roles this script may create. auth.php requires db.php itself.
+require_once dirname(__DIR__) . '/lib/auth.php';
 
 const MIN_PASSWORD_LENGTH = 12;
 
@@ -65,14 +67,24 @@ Creates an office account, or resets one's password.
 
   --email=...     the address they sign in with (required)
   --name="..."    their full name (required when creating)
-  --role=staff    staff (default) or admin
+  --role=staff    staff (default), admin, or instructor
   --reset         reset an existing account's password
   --password=...  set it directly. AVOID: this lands in your shell history.
                   Omit it and you will be prompted, or given a generated one.
   --list          show existing office accounts and stop
 
-Only staff and admin accounts can sign in to the office tool. Students are
-rows in the same table with role 'student' and cannot reach it.
+Only instructor, staff and admin accounts can sign in to the office tool.
+Students are rows in the same table with role 'student' and cannot reach it.
+
+An INSTRUCTOR sees the quiz screens and nothing else: they can write papers and
+read the grades for the courses they teach, and cannot open the payment desk.
+Assign them to their classes on the Intakes screen — an instructor assigned to
+no intake can see no course, which is the safe direction for that mistake to
+fail in.
+
+Note that creating an instructor account takes that address AWAY from Google
+sign-in. Everyone who works here signs in with a password; see the comment on
+MPC_OFFICE_ROLES in lib/auth.php.
 
 
 TXT;
@@ -92,7 +104,8 @@ try {
 if (isset($opts['list'])) {
     $rows = $db->query(
         "SELECT id, full_name, email, role, status, last_login_at
-           FROM users WHERE role IN ('staff','admin') ORDER BY id"
+           FROM users WHERE role IN ('instructor','staff','admin')
+          ORDER BY FIELD(role,'admin','staff','instructor'), id"
     )->fetchAll();
 
     if (! $rows) {
@@ -123,9 +136,14 @@ if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
     exit("--email is required and must be a valid address.\n");
 }
 
+// MPC_OFFICE_ROLES rather than a list typed here: this script and the login
+// page must admit exactly the same roles. When they disagree, this script
+// happily creates an account that the login page then refuses — which the
+// person holding it reports as "my password does not work", and which nobody
+// diagnoses as a wrong role for an hour.
 $role = strtolower(trim((string) ($opts['role'] ?? 'staff')));
-if (! in_array($role, ['staff', 'admin'], true)) {
-    exit("--role must be 'staff' or 'admin'.\n");
+if (! in_array($role, MPC_OFFICE_ROLES, true)) {
+    exit('--role must be one of: ' . implode(', ', MPC_OFFICE_ROLES) . ".\n");
 }
 
 $stmt = $db->prepare("SELECT id, full_name, role, status FROM users WHERE email = ?");

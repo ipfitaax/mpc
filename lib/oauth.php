@@ -13,7 +13,8 @@
  *
  * WHY THE OFFICE TOOL IS NOT REACHABLE THIS WAY
  * mpc_google_link_user() refuses to attach a Google identity to an account whose
- * role is staff or admin, and refuses to sign one in. Staff keep passwords.
+ * role is in MPC_OFFICE_ROLES — instructor, staff or admin — and refuses to
+ * sign one in. Everyone who works here keeps a password.
  *
  * The reason is worth stating because the refusal looks like an inconvenience
  * until you follow it through: admin/ writes to an append-only money ledger. If
@@ -329,7 +330,7 @@ function mpc_google_link_user(array $claims): array
         if ($linked['status'] !== 'active') {
             return [null, 'That account is suspended. Please call the office.'];
         }
-        if (in_array($linked['role'], ['staff', 'admin'], true)) {
+        if (in_array($linked['role'], MPC_OFFICE_ROLES, true)) {
             return [null, mpc_google_staff_message()];
         }
 
@@ -347,7 +348,7 @@ function mpc_google_link_user(array $claims): array
         $existing = $stmt->fetch();
 
         if ($existing) {
-            if (in_array($existing['role'], ['staff', 'admin'], true)) {
+            if (in_array($existing['role'], MPC_OFFICE_ROLES, true)) {
                 return [null, mpc_google_staff_message()];
             }
             if ($existing['status'] !== 'active') {
@@ -416,8 +417,13 @@ function mpc_google_insert_link(int $userId, array $claims): void
     ]);
 }
 
-/** The one message staff see, in one place, so the two call sites cannot drift
- *  into saying different things about the same rule. */
+/** The one message an office account sees, in one place, so the two call sites
+ *  cannot drift into saying different things about the same rule.
+ *
+ *  It says "staff account" for an instructor too, and that is deliberate rather
+ *  than sloppy: naming the exact role would tell anyone who types an address
+ *  into the Google button which addresses are instructors and which are admins.
+ *  The person who actually holds the account already knows which they are. */
 function mpc_google_staff_message(): string
 {
     return 'That address belongs to an MPC staff account. Staff sign in with a '

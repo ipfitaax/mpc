@@ -118,6 +118,21 @@ deployment:
     # on a 404 — the flow works and looks broken.
     - /bin/cp -a account.php $DEPLOYPATH/
 
+    # The student side of the quiz module. Same reason as account.php: these
+    # render from the server's session and the dc runtime cannot see one.
+    #
+    # A WARNING ABOUT DEPLOYING THESE WITHOUT admin/. Nothing on the host can
+    # CREATE a quiz while the office tool is left out of this file (see the
+    # block at the bottom), so on a host without admin/ these two pages are
+    # correct and permanently empty: every student sees "Nothing to sit yet".
+    # That is honest rather than broken, and it is not useful. Deploy admin/ in
+    # the same change if the intention is for anyone to actually sit a paper —
+    # and read the block at the bottom first, because admin/ carries no deny
+    # rule and needs mpc-config.php above public_html or it throws a fatal
+    # error at a visitor.
+    - /bin/cp -a quizzes.php $DEPLOYPATH/
+    - /bin/cp -a quiz.php $DEPLOYPATH/
+
     # verify.php and the rewrite that makes mpc.so/verify work. The receipt slip
     # is printed with that URL on it, so the .htaccess is not optional cosmetics
     # — without it every printed receipt points at a 404.
@@ -144,6 +159,42 @@ deployment:
     - /bin/cp -a assets/. $DEPLOYPATH/assets/
     - /bin/cp -a uploads/. $DEPLOYPATH/uploads/
     - /bin/cp -a api/. $DEPLOYPATH/api/
+
+    # ---------------------------------------------------------------------
+    # The office tool. Deployed as of this commit; it was left out until now.
+    #
+    # WHAT MADE IT SAFE TO SHIP, checked rather than assumed. admin/ needs
+    # mpc-config.php sitting ALONGSIDE public_html, and without it every screen
+    # throws a fatal error at whoever opens it. That file is confirmed present:
+    #     curl 'https://mpc.so/verify?c=AAAAAAAAAAAA'
+    # answers "No receipt matches that code", and it can only produce that
+    # sentence by connecting to the database and running a query. A host with no
+    # config could not answer it at all.
+    #
+    # If that check ever stops answering, this task is the first thing to
+    # comment out again: admin/ is the one directory here with no deny rule,
+    # because it is meant to be reachable, so a broken config is visible to the
+    # public rather than hidden behind a 403.
+    #
+    # THE DATABASE IS A SEPARATE DEPLOYMENT AND IT IS NOT AUTOMATED. Files
+    # arrive here; tables do not. The quiz screens need
+    # database/migrations/004-assessment.sql run by hand, GRANTs included, and
+    # nothing in this file can do that. They handle the gap themselves rather
+    # than crashing — mpc_quiz_tables_present() in lib/quiz.php names the
+    # migration on the office screens and tells students it is not switched on
+    # yet — so deploying before migrating is untidy, not an outage.
+    # INTO office/admin, not admin/. mpc-login.html sends staff to
+    # `./office/admin/login.php`, and mpc.so/office/admin/login.php answers 200
+    # today, so office/ is where the office tool actually lives on this host —
+    # put there by hand, before this file was ever asked to deploy it.
+    #
+    # Copying to $DEPLOYPATH/admin instead would not move that installation an
+    # inch. It would stand up a SECOND admin tree at /admin/, leave the one
+    # staff actually open stale, and hand this repo two copies to keep in step
+    # with no way to tell from the outside which one someone is logged into.
+    # The link in the login page is the spec; this follows it.
+    - /bin/mkdir -p $DEPLOYPATH/office/admin
+    - /bin/cp -a admin/. $DEPLOYPATH/office/admin/
 
     # ONLY the deny rule, never the .jsonl files beside it. Enquiries written on
     # the server are the live copy; the repo has no business overwriting them.
@@ -180,32 +231,48 @@ deployment:
     - date -u +%Y-%m-%dT%H:%M:%SZ >> $DEPLOYPATH/build.txt || true
 
     # ---------------------------------------------------------------------
-    # The office ledger — left out of the deploy on purpose.
+    # bin/ and database/ — still left out, and now deliberately never coming.
     #
-    # admin/ is measurably NOT on the host: /admin/login.php returns 404, and
-    # admin/ is the one directory here that ships no deny rule, so a 404 there
-    # can only mean the file is absent.
+    # admin/ moved up into the tasks above. These two did NOT follow it, and
+    # that is a change of mind rather than an oversight: the earlier version of
+    # this block listed all three together, to be uncommented in one go.
     #
-    # lib/ IS on the host, whatever the probes suggest: /verify renders and
-    # answers a lookup with "No receipt", and that path requires lib/db.php and
-    # queries the ledger. Do not trust the directory probes to tell you
-    # otherwise — /lib/, /bin/ and /database/ all return 404 while /storage/
-    # returns 403 from a byte-identical deny rule, so 404-vs-403 does not
-    # distinguish "denied" from "missing" on this host. Check over SSH or in
-    # File Manager before concluding anything about those three.
+    # THE REASON IS THAT THEY ARE ALREADY ON THE HOST. cPanel clones this repo
+    # to ~/repositories/mpc, outside the web root, and the deploy copies FROM
+    # there. So bin/adduser.php and database/migrations/*.sql are sitting on the
+    # server already — every CLI job that needs them can be run from the clone,
+    # and copying them into public_html would put a database dumper and the
+    # whole schema inside the web root to gain precisely nothing.
     #
-    # Do not simply uncomment these. admin/ is a public, reachable directory
-    # with no deny rule, and it needs mpc-config.php sitting ALONGSIDE
-    # public_html plus the restricted database user before it can do anything
-    # but throw a fatal error at a visitor. Work README steps 4-6 first
-    # (mpc-config.php, bin/selftest.php, bin/adduser.php), then uncomment.
+    # They rely on a deny rule if they go in; they rely on nothing at all if
+    # they stay out. That is the better of the two.
     #
-    # - /bin/mkdir -p $DEPLOYPATH/admin $DEPLOYPATH/bin $DEPLOYPATH/database
-    # - /bin/cp -a admin/. $DEPLOYPATH/admin/
-    # - /bin/cp -a bin/. $DEPLOYPATH/bin/
-    # - /bin/cp -a database/. $DEPLOYPATH/database/
+    # RUNNING THEM FROM THE CLONE takes one environment variable. The config
+    # lookup in lib/db.php resolves `dirname(__DIR__, 2) . '/mpc-config.php'`,
+    # which from public_html/lib finds ~/mpc-config.php and from
+    # ~/repositories/mpc/lib looks for ~/repositories/mpc-config.php and finds
+    # nothing. MPC_CONFIG overrides it:
+    #
+    #   cd ~/repositories/mpc
+    #   export MPC_CONFIG=~/mpc-config.php
+    #   php bin/selftest.php
+    #   php bin/adduser.php --email=you@mpc.so --name="Your Name" --role=admin
+    #   mysql -u USER -p DBNAME < database/migrations/004-assessment.sql
+    #
+    # Note MPC_CONFIG is read with getenv() and can only be set by whoever runs
+    # the process — a web request cannot set it. That is why it is safe as an
+    # override and would not be as a query parameter.
     #
     # bin/backup.php is the one with a deadline attached: README step 7 wants it
-    # on a nightly cPanel cron, and a cron pointed at a file this deploy does not
-    # copy is a backup that never runs while looking exactly like one that does.
+    # on a nightly cPanel cron. Point the cron at the clone, with the same
+    # variable, and it never needs to be web-reachable:
+    #
+    #   MPC_CONFIG=/home/USER/mpc-config.php /usr/local/bin/php \
+    #     /home/USER/repositories/mpc/bin/backup.php
+    #
+    # ON READING THE HOST, which cost a wrong conclusion once: /lib/, /bin/ and
+    # /database/ all return 404 while /storage/ returns 403 from a byte-identical
+    # deny rule, so 404-vs-403 does not distinguish "denied" from "missing" here.
+    # Do not conclude a directory is absent from its status code — check over SSH
+    # or in File Manager. lib/ IS on the host and always was.
     # ---------------------------------------------------------------------

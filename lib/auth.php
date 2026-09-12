@@ -30,6 +30,30 @@ require_once __DIR__ . '/db.php';
 const MPC_LOGIN_MAX_FAILURES  = 8;
 const MPC_LOGIN_WINDOW_MINUTES = 15;
 
+/**
+ * The roles that sign in with a password, at admin/login.php.
+ *
+ * ONE list, in one place, because it is read by three files that must never
+ * disagree: mpc_attempt_login() below admits exactly these roles, lib/oauth.php
+ * REFUSES exactly these roles a Google identity, and lib/quiz.php gates the
+ * office quiz screens on them. Those three are the same set seen from three
+ * directions — "who may hold a password", "who may not use Google", "who works
+ * here" — and the day they are three separate arrays is the day someone adds a
+ * role to one and creates an account that has office access and is enterable
+ * through somebody's Gmail.
+ *
+ * `instructor` is on this list, and it was added the day instructors got quiz
+ * screens. Before that the role existed in the users ENUM and nothing read it.
+ * It is here rather than treated as a lesser staff member because the account
+ * can now see every student's grades and write the papers they are marked on:
+ * that is not the money ledger, but it is not a student account either.
+ *
+ * Adding a role here has TWO consequences, and the second is easy to miss:
+ * it can sign in, AND it stops being reachable by Google sign-in. Both are
+ * intended. Read the top of lib/oauth.php before changing this line.
+ */
+const MPC_OFFICE_ROLES = ['instructor', 'staff', 'admin'];
+
 
 /**
  * Starts the session with the flags that matter, exactly once.
@@ -308,7 +332,7 @@ function mpc_attempt_login(string $email, string $password): ?string
 
     if (! password_verify($password, $hash) || ! $user
         || $user['status'] !== 'active'
-        || ! in_array($user['role'], ['staff', 'admin'], true)) {
+        || ! in_array($user['role'], MPC_OFFICE_ROLES, true)) {
         mpc_log_login_attempt($email, $user['id'] ?? null, false);
         return $generic;
     }

@@ -29,6 +29,11 @@
  *     GRANT UPDATE, DELETE ON mpc_db.users TO 'mpc_app'@'localhost';
  *     GRANT UPDATE ON mpc_db.enrollments TO 'mpc_app'@'localhost';
  *     GRANT DELETE ON mpc_db.verify_attempts TO 'mpc_app'@'localhost';
+ *     GRANT UPDATE, DELETE ON mpc_db.quizzes TO 'mpc_app'@'localhost';
+ *     GRANT UPDATE, DELETE ON mpc_db.quiz_questions TO 'mpc_app'@'localhost';
+ *     GRANT UPDATE, DELETE ON mpc_db.quiz_options TO 'mpc_app'@'localhost';
+ *     GRANT UPDATE ON mpc_db.quiz_attempts TO 'mpc_app'@'localhost';
+ *     GRANT DELETE ON mpc_db.intake_instructors TO 'mpc_app'@'localhost';
  *     FLUSH PRIVILEGES;
  *
  * users and enrollments get UPDATE because a student's phone number and an
@@ -37,6 +42,20 @@
  * verify_attempts gets DELETE so the public verify page can prune its own
  * rate-limit log. That is safe in a way DELETE on payments is not: it is a log,
  * not money.
+ *
+ * The quiz papers get UPDATE and DELETE because a paper is a document that gets
+ * corrected. Note what is missing from that list and is missing on purpose:
+ * quiz_attempts has UPDATE (the score is written once, at submission) but NO
+ * DELETE, and quiz_answers has neither. An attempt row is the record that a
+ * named student sat an exam and scored what they scored. The application can
+ * create that record and it can never destroy it — the same argument as
+ * `payments`, one size down. A grade that needs correcting is corrected by
+ * letting the student sit another attempt, which leaves both sittings visible.
+ *
+ * These five lines are easy to forget on an existing database, and forgetting
+ * them fails in a way that reads as a code bug: the quiz screens load, list
+ * papers correctly, and then refuse every edit. See
+ * database/migrations/004-assessment.sql.
  *
  * Keep the owner account for migrations and backups only.
  */

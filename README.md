@@ -11,15 +11,20 @@ Website Renewal and New Page Content Document*.
 
 ## What this is, and deliberately is not
 
-It is a **static page plus two small PHP endpoints**. There is no framework, no
-build step, no database.
+It started as a **static page plus two small PHP endpoints**, with no framework,
+no build step and no database.
 
-That is a choice, not a shortcut. The whole job is one page and one form. A
-Laravel install would add a deployment pipeline, a migration story and a
-dependency tree to a site whose hardest requirement is "email the enrollment
-team when a student asks about a course". When MPC needs student records,
-batches and payment tracking, that is the point to reach for a framework —
-and this page will still be the front of it.
+That was a choice, not a shortcut. The whole job was one page and one form. A
+Laravel install would have added a deployment pipeline, a migration story and a
+dependency tree to a site whose hardest requirement was "email the enrollment
+team when a student asks about a course".
+
+Two of those four are still true, and they are the two that matter: **no
+framework and no build step.** The repo IS the deployment. What changed is the
+database, and it changed when MPC needed the things this section predicted —
+student records and payment tracking, and now assessment. It arrived as a
+schema and plain PDO rather than as a framework, which is the same trade made
+again: the site is still a directory of files you can read.
 
 ```
 index.html          the whole site: 16 sections, per the plan's page order
@@ -27,7 +32,17 @@ assets/logo.png     MPC logo
 api/shared.php      storage location + input cleaning, in one place
 api/enquiry.php     receives a student enquiry: saves it, then emails MPC
 api/newsletter.php  receives a newsletter signup
+api/auth/google/    sign in with Google — sign-in and nothing more
 storage/            enquiries.jsonl, subscribers.jsonl (never web-readable)
+
+account.php         where a signed-in student lands
+quizzes.php         a student's quizzes, and what they scored
+quiz.php            sit one quiz, submit it, see the result
+lib/                the shared rules: db, auth, oauth, ledger, quiz, page chrome
+admin/              the office tool: payments, students, intakes, quizzes
+database/           ledger.sql is the database; future.sql is what is only designed
+bin/                adduser, backup, selftest — run from a shell, never the web
+tests/              PHPUnit, against a scratch database it builds itself
 ```
 
 ## The rule these endpoints are built around
@@ -180,7 +195,12 @@ without them, but these are the questions a student asks before enrolling:
 - Entry requirements, minimum age, documents
 - Class schedule and teaching language
 - Whether students need their own computer, or MPC provides lab access
-- Assessment rules and what the certificate requires
+- Assessment rules and what the certificate requires. **Two of these are now
+  decisions the code enforces rather than questions**, and they should be
+  confirmed as written rather than discovered by a student: a quiz is closed to
+  anyone whose monthly fees are not paid to the current month, and marking is
+  all-or-nothing on multi-answer questions. Both are one line to change, and
+  both are in `lib/quiz.php` with a test naming them.
 - Instructor names, titles and credentials, with their consent
 - Confirmed office hours and a map link
 

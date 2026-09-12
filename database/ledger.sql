@@ -7,19 +7,26 @@
 -- Read this file top to bottom; the tables are ordered so foreign keys always
 -- point at something already created.
 --
--- THIS FILE IS THE DATABASE. Eight tables: the seven the payment ledger needs,
--- plus the one Google sign-in needs. If it is not here, it is not on the server.
+-- THIS FILE IS THE DATABASE. Fourteen tables: the seven the payment ledger
+-- needs, the one Google sign-in needs, and the six the quiz module needs. If it
+-- is not here, it is not on the server.
 --
---   users            students and office staff. One table, not two.
---   social_accounts  a Google identity linked to a user
---   courses          the thing that is taught
---   intakes          one running of a course
---   enrollments      a student on one running of a course
---   payments         money, append-only
---   login_attempts   rate limiting and "was this account broken into"
---   verify_attempts  failed public receipt lookups
+--   users              students, instructors and office staff. One table, not three.
+--   social_accounts    a Google identity linked to a user
+--   courses            the thing that is taught
+--   intakes            one running of a course
+--   enrollments        a student on one running of a course
+--   payments           money, append-only
+--   intake_instructors who teaches which intake
+--   quizzes            a quiz paper, hung off a course
+--   quiz_questions     one question on one paper
+--   quiz_options       the choices, and which of them are right
+--   quiz_attempts      one sitting of one paper by one student
+--   quiz_answers       what they picked
+--   login_attempts     rate limiting and "was this account broken into"
+--   verify_attempts    failed public receipt lookups
 --
--- The rest of the portal — modules, lessons, recordings, quizzes, attendance,
+-- The rest of the portal — modules, lessons, recordings, attendance,
 -- certificates, enquiries — is designed and reasoned about in
 -- `future.sql`, and nothing creates it. That file is not dead weight: the
 -- thinking in it was paid for, and it is where those tables go when they are
@@ -341,6 +348,191 @@ CREATE TRIGGER payments_no_update BEFORE UPDATE ON payments
 CREATE TRIGGER payments_no_delete BEFORE DELETE ON payments
   FOR EACH ROW SIGNAL SQLSTATE '45000'
   SET MESSAGE_TEXT = 'payments is append-only: a payment row is never deleted';
+
+
+-- ===========================================================================
+-- ASSESSMENT
+-- ===========================================================================
+
+-- Who teaches which intake. Many-to-many: courses are often co-taught.
+--
+-- Graduated from future.sql when admin/quizzes.php started reading it. It is
+-- here rather than left designed because it is the ONLY thing that answers
+-- "may this instructor touch this quiz?" — without it, scoping an instructor
+-- to their own class is a comment rather than a check.
+--
+-- Note what it scopes on: an INTAKE, not a course. An instructor who taught
+-- the January class has no business editing the paper the March class is about
+-- to sit — except that quizzes hang off the course, so they do. That is a real
+-- limitation, written down here rather than discovered later: see the comment
+-- on `quizzes.course_id`.
+CREATE TABLE intake_instructors (
+  intake_id BIGINT UNSIGNED NOT NULL,
+  user_id   BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (intake_id, user_id),
+  KEY ix_ii_user (user_id),
+  CONSTRAINT fk_ii_intake FOREIGN KEY (intake_id) REFERENCES intakes (id) ON DELETE CASCADE,
+  CONSTRAINT fk_ii_user   FOREIGN KEY (user_id)   REFERENCES users (id)   ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- A quiz paper.
+--
+-- `course_id`, NOT intake_id, and that is a decision with a cost. A quiz
+-- belongs to the COURSE, so every intake of that course sits the same paper and
+-- a question written once is not retyped for the March class. The cost is that
+-- instructor scoping is coarser than it looks: an instructor who teaches any
+-- intake of a course can edit every quiz on it, including papers a colleague
+-- wrote for a different class. That is acceptable at MPC's size — one or two
+-- instructors per course who talk to each other daily — and it is the wrong
+-- answer at four times that size. When it starts to hurt, the fix is a
+-- quiz_intakes table, not a second course_id.
+--
+-- NO lesson_id, and the design in future.sql had one. `lessons` does not exist:
+-- it is still in future.sql and nothing creates it. A foreign key to a table
+-- that is not there fails at CREATE, and a bare column that never points at
+-- anything is a field people fill in with a number that means nothing. Add it
+-- back in the same commit that graduates `lessons`, and not before.
+--
+-- `is_published` is the catch between "I am writing this paper" and "the class
+-- can see it". A half-written quiz students can sit is worse than no quiz: it
+-- produces recorded grades against questions that were never finished. Nothing
+-- renders an unpublished quiz to a student — see lib/quiz.php.
+CREATE TABLE quizzes (
+  id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  course_id          BIGINT UNSIGNED NOT NULL,
+  title              VARCHAR(160)    NOT NULL,
+  instructions       TEXT            NULL,
+  pass_mark_percent  TINYINT UNSIGNED NOT NULL DEFAULT 50,
+  time_limit_minutes SMALLINT UNSIGNED NULL,  -- NULL = untimed
+  max_attempts       TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  shuffle_questions  TINYINT(1)      NOT NULL DEFAULT 1,
+  is_published       TINYINT(1)      NOT NULL DEFAULT 0,
+  created_by         BIGINT UNSIGNED NULL,
+  created_at         DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (id),
+  KEY ix_quiz_course (course_id, is_published),
+  CONSTRAINT fk_quiz_course FOREIGN KEY (course_id)  REFERENCES courses (id) ON DELETE CASCADE,
+  CONSTRAINT fk_quiz_author FOREIGN KEY (created_by) REFERENCES users (id)   ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- One question on one paper.
+--
+-- `short_text` from the designed ENUM is deliberately NOT carried over. This
+-- pass marks every question automatically, and a free-text answer cannot be
+-- marked automatically without either a fuzzy string match — which fails a
+-- correct answer over a typo, in front of a student who then carries a grade
+-- they did not earn — or a human, which is the marking queue this pass does not
+-- build. Widening an ENUM later rewrites the table; that is a one-off cost
+-- worth paying on the day there is a marker to send the answers to.
+CREATE TABLE quiz_questions (
+  id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  quiz_id     BIGINT UNSIGNED NOT NULL,
+  type        ENUM('single','multiple','truefalse') NOT NULL DEFAULT 'single',
+  text        TEXT            NOT NULL,
+  points      SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+  position    SMALLINT        NOT NULL DEFAULT 0,
+  explanation TEXT            NULL,   -- shown after submission; the teaching happens here
+
+  PRIMARY KEY (id),
+  KEY ix_qq_quiz (quiz_id, position),
+  CONSTRAINT fk_qq_quiz FOREIGN KEY (quiz_id) REFERENCES quizzes (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Answer options.
+--
+-- `is_correct` NEVER leaves the server for a paper a student is sitting. Select
+-- it in the marking query, not in the query that renders the paper, or the
+-- answer key is in the page source and the quiz measures nothing. This is not
+-- theoretical: it is one careless `SELECT *` away, which is why lib/quiz.php
+-- names its columns and why a test asserts on the rendered markup rather than
+-- on what the function happens to return.
+CREATE TABLE quiz_options (
+  id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  question_id BIGINT UNSIGNED NOT NULL,
+  text        VARCHAR(500)    NOT NULL,
+  is_correct  TINYINT(1)      NOT NULL DEFAULT 0,
+  position    SMALLINT        NOT NULL DEFAULT 0,
+
+  PRIMARY KEY (id),
+  KEY ix_qo_question (question_id, position),
+  CONSTRAINT fk_qo_question FOREIGN KEY (question_id) REFERENCES quiz_questions (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- One sitting of one paper by one student.
+--
+-- A row is created when the student OPENS the paper, not when they submit, so
+-- `submitted_at IS NULL` is a sitting in progress or one that was abandoned.
+-- That ordering is what makes `max_attempts` mean anything: counting only
+-- submitted rows lets a student open a paper, read every question, close the
+-- tab, and come back with the questions known and the attempt counter still at
+-- zero.
+--
+-- The score columns are NULL until submission and are written exactly once, by
+-- the server, from the option rows. Nothing the browser posts contributes a
+-- number to them.
+--
+-- `total_points` is stored rather than recomputed from the questions. A paper
+-- edited after a class sat it would otherwise silently restate every past grade
+-- as a fraction of the new total — a student's 8/10 becoming 8/14 months later,
+-- with nothing in the record showing why.
+--
+-- `enrollment_id` records which enrolment the sitting was under. It is
+-- ON DELETE SET NULL, not CASCADE: deleting an enrolment must not delete the
+-- record that a student sat and passed an exam.
+CREATE TABLE quiz_attempts (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  quiz_id       BIGINT UNSIGNED NOT NULL,
+  user_id       BIGINT UNSIGNED NOT NULL,
+  enrollment_id BIGINT UNSIGNED NULL,
+  attempt_no    TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  started_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  submitted_at  DATETIME        NULL,
+  score_points  SMALLINT UNSIGNED NULL,
+  total_points  SMALLINT UNSIGNED NULL,
+  score_percent DECIMAL(5,2)    NULL,
+  passed        TINYINT(1)      NULL,
+
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_attempt (quiz_id, user_id, attempt_no),
+  KEY ix_attempt_user (user_id),
+  KEY ix_attempt_quiz (quiz_id, submitted_at),
+  CONSTRAINT fk_att_quiz  FOREIGN KEY (quiz_id)       REFERENCES quizzes (id)     ON DELETE CASCADE,
+  CONSTRAINT fk_att_user  FOREIGN KEY (user_id)       REFERENCES users (id)       ON DELETE CASCADE,
+  CONSTRAINT fk_att_enrol FOREIGN KEY (enrollment_id) REFERENCES enrollments (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- One row per option a student selected.
+--
+-- Multi-select questions produce several rows for one question, which is why
+-- the primary key is not (attempt, question). A question left blank produces no
+-- rows at all — absence is the record of "not answered", and it scores zero the
+-- same way a wrong answer does.
+--
+-- `points_awarded` is SIGNED and stays that way: it is never negative today,
+-- but an UNSIGNED column turns any future negative-marking scheme into a wrap
+-- to 65535, which is a grade nobody can explain to the student holding it.
+CREATE TABLE quiz_answers (
+  id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  attempt_id     BIGINT UNSIGNED NOT NULL,
+  question_id    BIGINT UNSIGNED NOT NULL,
+  option_id      BIGINT UNSIGNED NULL,
+  is_correct     TINYINT(1)      NULL,
+  points_awarded SMALLINT        NOT NULL DEFAULT 0,
+  answered_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (id),
+  KEY ix_ans_attempt (attempt_id),
+  KEY ix_ans_question (question_id),
+  CONSTRAINT fk_ans_attempt  FOREIGN KEY (attempt_id)  REFERENCES quiz_attempts (id)  ON DELETE CASCADE,
+  CONSTRAINT fk_ans_question FOREIGN KEY (question_id) REFERENCES quiz_questions (id) ON DELETE CASCADE,
+  CONSTRAINT fk_ans_option   FOREIGN KEY (option_id)   REFERENCES quiz_options (id)   ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- ===========================================================================

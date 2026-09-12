@@ -142,24 +142,116 @@ runtime maps `onsubmit` to React's `onSubmit`, and React ignores a string
 listener, so the form falls through to a native GET submit that reloads the
 page. Bind a real handler with `onsubmit="{{ methodName }}"` instead.
 
+## Quizzes
+
+The first thing behind the student login that is not just a login. Papers are
+written in `admin/`, sat at `quiz.php`, and marked by the server.
+
+`lib/quiz.php` holds every rule; the pages render and never decide. Four routes
+touch this feature (author, publish, sit, review) and a rule written in a page
+is a rule that holds only on the pages someone remembered to write it on.
+
+Two rules are load-bearing and each has a test that fails when removed:
+
+1. **The answer key never reaches a browser sitting a paper.**
+   `mpc_quiz_paper()` does not select `is_correct` — not filtered afterwards,
+   never fetched — so a page can hand its whole return value to a template and
+   the answers are still not in it. `mpc_quiz_mark_attempt()` is the only
+   function that reads the key, and `mpc_quiz_review()` the only one that
+   shows it, for submitted attempts only.
+2. **Nothing the browser posts becomes a score.** The submission carries option
+   ids and nothing else; points, percentage and pass flag are computed on the
+   server. Option ids belonging to another question are dropped rather than
+   matched, so a hand-edited form cannot borrow a correct option from elsewhere.
+
+Marking is **all-or-nothing on multi-select** — two of three correct options
+scores zero, not two thirds. Partial credit is four different schemes that give
+four different grades for one paper, so it is a decision to make out loud rather
+than drift into. A question with **no correct option is excluded from the
+total** rather than scoring everyone zero, so one broken question cannot drag a
+class below the pass mark; the publish guard in `admin/quiz-edit.php` is what
+stops such a question reaching students in the first place, and it names the
+question that fails.
+
+**An attempt is spent when the paper is OPENED, not when it is submitted.**
+Counting submissions lets a student read every question, close the tab, and come
+back with an attempt still in hand. That is why `quiz.php` has a briefing screen
+that says so before the student presses Start, and why reopening an unsubmitted
+attempt returns the same row rather than burning another.
+
+Three things gate a student, in this order: the paper is published, they hold an
+**active** enrolment on an intake of that course, and their **fees are paid to
+the current month**. Fees are monthly, so "paid up" is `months_paid >=
+months_due`, never a zero balance — comparing against the course total would
+lock out everyone not paying six months in advance. The gate **fails open on
+missing data**: an enrolment with no start date or no agreed fee is incomplete
+paperwork, not evidence of non-payment.
+
+That third gate is MPC's decision and it has a cost worth keeping visible: a
+payment taken at the desk and not yet keyed in closes an exam the student has
+already paid for, and it looks to them like a broken website. That is why the
+refusal names the figures and the office number instead of saying no — the
+person answering the phone needs the student to be able to read out what the
+screen said.
+
+**Instructors** can now sign in. `MPC_OFFICE_ROLES` in `lib/auth.php` is one
+list read by three files that must never disagree: it is who may hold a
+password, who `lib/oauth.php` refuses a Google identity, and who reaches the
+quiz screens. Adding a role to it has two consequences and the second is easy to
+miss — it can sign in, *and* it stops being reachable by Google.
+
+Instructors are scoped to their own classes through `intake_instructors`,
+assigned on the Intakes screen. An instructor assigned to nothing may author
+nothing, which is the safe direction, but it fails silently — so the quiz screen
+explains it rather than rendering empty. Scoping is on the intake while quizzes
+hang off the course, so an instructor teaching any intake of a course can edit
+every paper on it; that is fine at MPC's size and wrong at four times it, and
+the fix when it hurts is a `quiz_intakes` table.
+
+`admin/quizzes.php` and its two screens call `mpc_require_teaching_staff()`,
+**not** `mpc_require_login()`, which still admits staff and admin only. Two
+gates on purpose: instructors teach, they do not work the payment desk. `MPC_NAV`
+in `lib/page.php` carries the roles for each screen so the nav does not offer a
+link the gate will refuse — a link that bounces you to a login page you are
+already past reads as a broken system, not a closed door.
+
+Grades are **not editable**. There is no box to type a mark into, and the
+application holds no `DELETE` on `quiz_attempts` and neither `UPDATE` nor
+`DELETE` on `quiz_answers` — the `payments` argument, one size down. A student
+who deserves another chance is given another attempt, which leaves both sittings
+on the record.
+
 ## The database
 
 `database/` is split so that one file describes what exists and another holds
 what is only designed. **No table is defined in both.** When a table graduates,
 move its `CREATE TABLE` and its comments across; do not copy them.
 
-- **`ledger.sql`** — the eight tables that are real: `users`, `social_accounts`,
-  `courses`, `intakes`, `enrollments`, `payments`, `login_attempts`,
-  `verify_attempts`. Run this on a fresh database and you are done; it is the
-  current state, hardening included.
-- **`future.sql`** — the other seventeen (modules, lessons, recordings, quizzes,
+- **`ledger.sql`** — the fourteen tables that are real: `users`,
+  `social_accounts`, `courses`, `intakes`, `enrollments`, `payments`,
+  `intake_instructors`, `quizzes`, `quiz_questions`, `quiz_options`,
+  `quiz_attempts`, `quiz_answers`, `login_attempts`, `verify_attempts`. Run this
+  on a fresh database and you are done; it is the current state, hardening
+  included.
+- **`future.sql`** — the other eleven (modules, lessons, recordings,
   attendance, certificates, enquiries). **Nothing creates these** and no PHP
   touches them. Kept because the reasoning in them was paid for.
   `social_accounts` is the worked example of graduation: it moved to
   `ledger.sql` the day `api/auth/google` started writing it, and `future.sql`
-  keeps only a one-line note saying where it went.
+  keeps only a one-line note saying where it went. The six assessment tables
+  followed the same route the day students could sit a paper — two of them
+  changed on the way across (`quizzes` lost `lesson_id`, `quiz_questions` lost
+  `short_text`), and both changes are argued in `ledger.sql` rather than in the
+  note left behind.
 - **`migrations/001-ledger-hardening.sql`** — carries a database built from the
   old `schema.sql` up to `ledger.sql`. Do not run it *and* `ledger.sql`.
+- **`migrations/004-assessment.sql`** — adds the six assessment tables to an
+  existing database. **Its GRANT section is part of the migration, not an
+  optional extra.** The application connects as a restricted user whose
+  privileges were granted on the tables that existed at the time, and a `GRANT`
+  does not reach forward to tables created later. Skip it and the quiz screens
+  load, list papers correctly, and refuse every edit — which reads as a code bug
+  for as long as it takes someone to think of it.
 
 Local dev database is **`mpc_db`** on XAMPP, which is **MariaDB 10.4**, not
 MySQL. That distinction matters: `CHECK` constraints are enforced on MariaDB
@@ -209,8 +301,16 @@ directly.
 
 The suite has been mutation-checked. Reverting the payments foreign key to
 `ON DELETE CASCADE` fails 3 tests, removing the negative-amount guard fails 1,
-and making `months_paid` round up fails 1. A suite that passes proves nothing
-until it has been shown to fail.
+and making `months_paid` round up fails 1. On the quiz side: adding `is_correct`
+to the paper query fails 1, counting only submitted attempts fails 2, giving
+partial credit on multi-select fails 2, removing the payment gate fails 1, and
+granting the application `DELETE` on `quiz_attempts` fails 1. A suite that
+passes proves nothing until it has been shown to fail.
+
+That last exercise earned its keep immediately: the abandoned-attempt test
+passed against a deliberately broken implementation, because it set
+`submitted_at` to *simulate* abandoning — which is the opposite of abandoning.
+A test that cannot fail is worse than a missing one, because it is counted.
 
 ## Conventions
 
@@ -251,22 +351,25 @@ until it has been shown to fail.
 ### Post-deploy health check
 
 ```bash
-for p in "" support.js image-slot.js api-form.js verify assets/logo.png; do
-  printf "%-16s %s\n" "/$p" "$(curl -s -o /dev/null -m 20 -w '%{http_code}' "https://mpc.so/$p")"
+for p in "" support.js image-slot.js api-form.js verify assets/logo.png admin/login.php; do
+  printf "%-18s %s\n" "/$p" "$(curl -s -o /dev/null -m 20 -w '%{http_code}' "https://mpc.so/$p")"
 done
 curl -s -o /dev/null -w 'storage deny: %{http_code}\n' https://mpc.so/storage/enquiries.jsonl
 STAMP=$(curl -sf -m 20 https://mpc.so/build.txt) || STAMP='NO STAMP (build.txt did not fetch)'
 printf 'deployed:   %s\nlocal HEAD: %s\n' "$(printf '%s\n' "$STAMP" | head -1)" "$(git rev-parse HEAD)"
 
-# Google sign-in. Neither is a 200, and that is the pass condition:
-#   account.php                 302 — signed out, so it bounces to the login page.
-#                                     A 200 here means it rendered a signed-in
-#                                     page to nobody, which is the one outcome
-#                                     that must never happen.
+# Signed-in pages. NOT ONE OF THESE IS A 200, and that is the pass condition —
+# every one is requested signed out, so a 200 means it rendered a signed-in page
+# to nobody, which is the single outcome that must never happen.
+#   account.php                 302 to the login page.
+#   quizzes.php, quiz.php       302 likewise. A 200 on quiz.php would mean an
+#                                     exam paper served to an anonymous
+#                                     visitor; a 500 means lib/quiz.php or
+#                                     lib/student-page.php did not deploy.
 #   api/auth/google/start.php   302 to accounts.google.com when configured,
 #                                     503 when the config has no google block.
 #                                     500 means lib/oauth.php did not deploy.
-for p in account.php api/auth/google/start.php; do
+for p in account.php quizzes.php "quiz.php?id=1" api/auth/google/start.php; do
   printf "%-28s %s\n" "/$p" "$(curl -s -o /dev/null -m 20 -w '%{http_code}' "https://mpc.so/$p")"
 done
 ```
@@ -296,6 +399,20 @@ tell a current deploy from a stale one: every status code above returns 200 on
 the previous commit just as happily as on this one, so without the stamp a
 green health check says the site is *up*, not that it is *current*.
 
+A 404 on any of `quizzes.php`, `quiz.php` or `admin/login.php` means
+`.cpanel.yml` did not copy them. All three deploy now; `admin/` was added when
+the quiz screens landed, because student pages without an office tool are a
+portal where no paper can ever be written.
+
+`admin/login.php` should answer **200** — it is the one directory here with no
+deny rule, because staff have to reach it. A **500** there means
+`mpc-config.php` is missing from beside `public_html`, and that is the failure
+this directory was held back for; comment its two tasks out again until the
+config is in place.
+
+Do not expect a fresh `admin/` deploy to have working quiz screens. Tables do
+not deploy with files — see the next section.
+
 Do not use a 404-vs-403 difference to decide whether a directory reached the
 host. On this host `/lib/`, `/bin/` and `/database/` all return 404 while
 `/storage/` returns 403 from a byte-identical deny rule, so the status code does
@@ -312,10 +429,34 @@ not distinguish "denied" from "missing". Check over SSH or in File Manager.
 3. Press *Update from Remote*, then *Deploy HEAD Commit*, then run the health
    check above.
 
-`admin/`, `bin/` and `database/` are commented out in `.cpanel.yml`. Read the
-block at the bottom of that file before enabling them: `admin/` carries no deny
-rule and needs `mpc-config.php` above `public_html` first, or it throws a fatal
-error at a visitor.
+### The database does not deploy, and nothing tells you so
+
+`.cpanel.yml` copies files. It does not run migrations, and there is no step
+anywhere that does. So the normal state of the first deploy of any schema change
+is **code present, tables absent** — and it lasts until a person notices.
+
+For the quiz module that means running, once, against the production database:
+
+```
+cd ~/repositories/mpc
+export MPC_CONFIG=~/mpc-config.php
+mysql -u USER -p DBNAME < database/migrations/004-assessment.sql
+```
+
+including the GRANT section at its bottom, with the user and database names
+edited. Skip the grants and the screens load, list papers, and refuse every
+edit — which reads as a code bug rather than a missing privilege.
+
+The code survives the gap rather than crashing through it:
+`mpc_quiz_tables_present()` in `lib/quiz.php` names the migration on the office
+screens and tells students the feature is not switched on yet. That is a
+courtesy, not a substitute for running it.
+
+`bin/` and `database/` are still **not** deployed and should stay that way.
+cPanel clones the repo to `~/repositories/mpc`, so they are already on the host
+outside the web root — run them from there with `MPC_CONFIG` set, as above.
+Copying them into `public_html` would put a database dumper and the whole schema
+behind nothing but a deny rule, to gain nothing at all.
 
 ## Skill routing
 

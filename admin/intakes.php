@@ -38,6 +38,50 @@ if (isset($_GET['created'])) {
     $notice = 'Created intake "' . (string) $_GET['created'] . '".';
 }
 
+/**
+ * Assigning an instructor to an intake.
+ *
+ * Handled before the create branch and returns early, because these two forms
+ * post to the same URL and the create branch would otherwise read an empty
+ * course_id and complain that no program was chosen.
+ *
+ * WHY THIS LIVES ON THE INTAKES SCREEN
+ * Because an intake IS "a start date, a class, a teacher" — the schema comment
+ * on the table says so. The teacher was the part that had nowhere to be
+ * recorded. It matters beyond tidiness now: intake_instructors is what scopes
+ * an instructor to their own classes on the quiz screens, so an instructor
+ * assigned to nothing can write nothing. That fails in the safe direction, but
+ * it fails silently, which is why the quiz screen explains it rather than
+ * showing an empty page.
+ */
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && in_array((string) ($_POST['action'] ?? ''), ['assign', 'unassign'], true)) {
+    mpc_csrf_check();
+
+    $intakeId  = (int) ($_POST['intake_id'] ?? 0);
+    $teacherId = (int) ($_POST['user_id'] ?? 0);
+
+    if ($intakeId && $teacherId) {
+        if ($_POST['action'] === 'assign') {
+            // The role is checked in the statement, not before it. A posted
+            // user_id belonging to a student would otherwise assign a student
+            // as the teacher of their own class — and, through
+            // mpc_quiz_author_courses(), hand them the answer key.
+            $stmt = $db->prepare(
+                'INSERT IGNORE INTO intake_instructors (intake_id, user_id)
+                 SELECT ?, id FROM users WHERE id = ? AND role = "instructor" AND status = "active"'
+            );
+            $stmt->execute([$intakeId, $teacherId]);
+        } else {
+            $db->prepare('DELETE FROM intake_instructors WHERE intake_id = ? AND user_id = ?')
+               ->execute([$intakeId, $teacherId]);
+        }
+    }
+
+    header('Location: ./intakes.php');
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     mpc_csrf_check();
 
@@ -119,6 +163,25 @@ $intakes = $db->query(
        JOIN courses c ON c.id = i.course_id
       ORDER BY i.starts_on DESC, i.id DESC"
 )->fetchAll();
+
+// Instructors, and who is already teaching what. Two small queries rather than
+// a join onto $intakes, because an intake with three instructors would
+// otherwise appear three times in that list and be counted three times in every
+// figure on it.
+$instructors = $db->query(
+    'SELECT id, full_name FROM users
+      WHERE role = "instructor" AND status = "active" ORDER BY full_name'
+)->fetchAll();
+
+$teaching = [];
+foreach ($db->query(
+    'SELECT ii.intake_id, ii.user_id, u.full_name
+       FROM intake_instructors ii
+       JOIN users u ON u.id = ii.user_id
+      ORDER BY u.full_name'
+)->fetchAll() as $row) {
+    $teaching[(int) $row['intake_id']][] = $row;
+}
 
 $statuses = [
     'planned'   => 'Planned',
@@ -219,7 +282,7 @@ mpc_message($notice, true);
       <thead>
         <tr>
           <th>Intake</th><th>Program</th><th>Starts</th><th>Ends</th>
-          <th>Status</th><th class="num">Enrolled</th><th class="num">Collected</th>
+          <th>Status</th><th>Teaching</th><th class="num">Enrolled</th><th class="num">Collected</th>
         </tr>
       </thead>
       <tbody>
@@ -235,6 +298,23 @@ mpc_message($notice, true);
             <td><?= e($i['starts_on'] ?? '') ?></td>
             <td><?= e($i['ends_on'] ?? '') ?></td>
             <td><?= e($statuses[$i['status']] ?? $i['status']) ?></td>
+            <td>
+              <?php if (empty($teaching[(int) $i['id']])): ?>
+                <span class="muted">&mdash;</span>
+              <?php else: foreach ($teaching[(int) $i['id']] as $t): ?>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <span><?= e($t['full_name']) ?></span>
+                  <form method="post" style="margin:0">
+                    <?php mpc_csrf_field(); ?>
+                    <input type="hidden" name="intake_id" value="<?= (int) $i['id'] ?>">
+                    <input type="hidden" name="user_id" value="<?= (int) $t['user_id'] ?>">
+                    <button type="submit" name="action" value="unassign" title="Remove from this intake"
+                            style="background:none;border:none;padding:0;color:<?= MPC_RED ?>;
+                                   font-size:.8rem;font-weight:700;cursor:pointer">&times;</button>
+                  </form>
+                </div>
+              <?php endforeach; endif; ?>
+            </td>
             <td class="num"><?= (int) $i['enrolled'] ?><?= $i['capacity'] ? ' / ' . (int) $i['capacity'] : '' ?></td>
             <td class="num"><?= e(mpc_money($i['collected'])) ?></td>
           </tr>
@@ -243,6 +323,50 @@ mpc_message($notice, true);
     </table>
   <?php endif; ?>
 </div>
+
+<?php if ($intakes): ?>
+  <div class="card">
+    <h2 style="font-size:1.05rem">Who teaches a class</h2>
+    <p class="muted" style="margin-top:0">
+      An instructor can write and mark quizzes only for the programs they are
+      assigned to teach. Assign nobody and they see nothing.
+    </p>
+
+    <?php if (! $instructors): ?>
+      <p style="margin-bottom:0">
+        There are no instructor accounts yet. Create one with
+        <code>php bin/adduser.php --email=... --name="..." --role=instructor</code>.
+      </p>
+    <?php else: ?>
+      <form method="post">
+        <?php mpc_csrf_field(); ?>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:18px">
+          <div>
+            <label for="assign_intake">Intake</label>
+            <select id="assign_intake" name="intake_id" required>
+              <option value="">Select</option>
+              <?php foreach ($intakes as $i): ?>
+                <option value="<?= (int) $i['id'] ?>">
+                  <?= e($i['name']) ?> &mdash; <?= e($i['course_title']) ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div>
+            <label for="assign_user">Instructor</label>
+            <select id="assign_user" name="user_id" required>
+              <option value="">Select</option>
+              <?php foreach ($instructors as $t): ?>
+                <option value="<?= (int) $t['id'] ?>"><?= e($t['full_name']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+        </div>
+        <button type="submit" name="action" value="assign">Assign to intake</button>
+      </form>
+    <?php endif; ?>
+  </div>
+<?php endif; ?>
 
 <?php
 mpc_page_foot();

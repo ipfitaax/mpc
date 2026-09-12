@@ -142,6 +142,22 @@ $owner->exec('GRANT SELECT, INSERT ON ' . MPC_TEST_DB . ".* TO '" . MPC_TEST_USE
 $owner->exec('GRANT UPDATE, DELETE ON ' . MPC_TEST_DB . ".users TO '" . MPC_TEST_USER . "'@'localhost'");
 $owner->exec('GRANT UPDATE ON ' . MPC_TEST_DB . ".enrollments TO '" . MPC_TEST_USER . "'@'localhost'");
 $owner->exec('GRANT DELETE ON ' . MPC_TEST_DB . ".verify_attempts TO '" . MPC_TEST_USER . "'@'localhost'");
+
+// The quiz module. A paper is a document and gets corrected, so its three
+// tables get UPDATE and DELETE.
+//
+// quiz_attempts gets UPDATE — the score is written once, at submission — and
+// NOT delete, and quiz_answers gets neither. That asymmetry is the point, and
+// QuizTest asserts on it: an attempt row is the record that a named student sat
+// an exam, and the application must not be able to destroy one. Same argument as
+// `payments`, one size down. If you add DELETE here to make a test pass, you
+// have removed the thing the test was checking.
+$owner->exec('GRANT UPDATE, DELETE ON ' . MPC_TEST_DB . ".quizzes TO '" . MPC_TEST_USER . "'@'localhost'");
+$owner->exec('GRANT UPDATE, DELETE ON ' . MPC_TEST_DB . ".quiz_questions TO '" . MPC_TEST_USER . "'@'localhost'");
+$owner->exec('GRANT UPDATE, DELETE ON ' . MPC_TEST_DB . ".quiz_options TO '" . MPC_TEST_USER . "'@'localhost'");
+$owner->exec('GRANT UPDATE ON ' . MPC_TEST_DB . ".quiz_attempts TO '" . MPC_TEST_USER . "'@'localhost'");
+$owner->exec('GRANT DELETE ON ' . MPC_TEST_DB . ".intake_instructors TO '" . MPC_TEST_USER . "'@'localhost'");
+
 $owner->exec('FLUSH PRIVILEGES');
 
 // ---------------------------------------------------------------------------
@@ -169,6 +185,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/oauth.php';
+require_once __DIR__ . '/../lib/quiz.php';
 
 /** The owner connection, for fixtures and for asserting on things the app cannot see. */
 function test_owner(): PDO
@@ -203,6 +220,15 @@ function test_reset(): void
     $o->exec('DELETE FROM payments WHERE reverses_payment_id IS NOT NULL');
     $o->exec('DELETE FROM payments');
     $o->exec('DELETE FROM enrollments');
+
+    // Quizzes hang off COURSES, and courses are seeded rather than deleted, so
+    // unlike the attempts and answers below them these do not disappear when
+    // users and intakes go. Deleting them explicitly is what stops one test's
+    // paper being visible to the next one — which shows up as a passing test
+    // that stops passing when run alone.
+    $o->exec('DELETE FROM quizzes');
+    $o->exec('DELETE FROM intake_instructors');
+
     $o->exec('DELETE FROM intakes');
     $o->exec('DELETE FROM users');
     $o->exec('DELETE FROM login_attempts');

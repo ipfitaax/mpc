@@ -5,7 +5,7 @@
 -- here. It is a design, kept because the reasoning in it was paid for and
 -- would be rewritten worse from memory in a year.
 --
--- The eight tables that DO exist live in `ledger.sql`. No table is defined in
+-- The fourteen tables that DO exist live in `ledger.sql`. No table is defined in
 -- both files. When one of these graduates — when there is code that reads and
 -- writes it — move the CREATE TABLE and its comments across, do not copy them.
 -- Two definitions of one table is how they drift. `social_accounts` is the
@@ -16,9 +16,8 @@
 --
 -- WHAT IS HERE
 --   people        instructor profiles, email verification, password resets
---   catalogue     modules, lessons, recordings, who teaches which intake
+--   catalogue     modules, lessons, recordings
 --   study         lesson progress, attendance
---   assessment    quizzes, questions, options, attempts, answers
 --   awards        certificates
 --   admin         enquiries from the public site, newsletter subscribers
 --
@@ -92,15 +91,10 @@ CREATE TABLE password_resets (
 -- CATALOGUE
 -- ===========================================================================
 
--- Who teaches which intake. Many-to-many: courses are often co-taught.
-CREATE TABLE intake_instructors (
-  intake_id BIGINT UNSIGNED NOT NULL,
-  user_id   BIGINT UNSIGNED NOT NULL,
-  PRIMARY KEY (intake_id, user_id),
-  KEY ix_ii_user (user_id),
-  CONSTRAINT fk_ii_intake FOREIGN KEY (intake_id) REFERENCES intakes (id) ON DELETE CASCADE,
-  CONSTRAINT fk_ii_user   FOREIGN KEY (user_id)   REFERENCES users (id)   ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- intake_instructors GRADUATED. It now lives in ledger.sql, created and read by
+-- lib/quiz.php, which uses it to answer "may this instructor touch this quiz?".
+-- It left this file the day instructor scoping stopped being a comment and
+-- became a check.
 
 CREATE TABLE modules (
   id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -203,92 +197,24 @@ CREATE TABLE attendance (
 -- ASSESSMENT
 -- ===========================================================================
 
-CREATE TABLE quizzes (
-  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  course_id         BIGINT UNSIGNED NOT NULL,
-  lesson_id         BIGINT UNSIGNED NULL,     -- NULL = a course-level exam
-  title             VARCHAR(160)    NOT NULL,
-  instructions      TEXT            NULL,
-  pass_mark_percent TINYINT UNSIGNED NOT NULL DEFAULT 50,
-  time_limit_minutes SMALLINT UNSIGNED NULL,  -- NULL = untimed
-  max_attempts      TINYINT UNSIGNED NOT NULL DEFAULT 1,
-  shuffle_questions TINYINT(1)      NOT NULL DEFAULT 1,
-  is_published      TINYINT(1)      NOT NULL DEFAULT 0,
-  created_at        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-  PRIMARY KEY (id),
-  KEY ix_quiz_course (course_id),
-  CONSTRAINT fk_quiz_course FOREIGN KEY (course_id) REFERENCES courses (id) ON DELETE CASCADE,
-  CONSTRAINT fk_quiz_lesson FOREIGN KEY (lesson_id) REFERENCES lessons (id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE quiz_questions (
-  id        BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  quiz_id   BIGINT UNSIGNED NOT NULL,
-  type      ENUM('single','multiple','truefalse','short_text') NOT NULL DEFAULT 'single',
-  text      TEXT            NOT NULL,
-  points    SMALLINT UNSIGNED NOT NULL DEFAULT 1,
-  position  SMALLINT        NOT NULL DEFAULT 0,
-  explanation TEXT          NULL,   -- shown after submission; this is where teaching happens
-
-  PRIMARY KEY (id),
-  KEY ix_qq_quiz (quiz_id, position),
-  CONSTRAINT fk_qq_quiz FOREIGN KEY (quiz_id) REFERENCES quizzes (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Answer options. `is_correct` NEVER leaves the server for an unsubmitted
--- quiz: select it in the marking query, not in the query that renders the
--- paper, or the answers are in the page source.
-CREATE TABLE quiz_options (
-  id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  question_id BIGINT UNSIGNED NOT NULL,
-  text        VARCHAR(500)    NOT NULL,
-  is_correct  TINYINT(1)      NOT NULL DEFAULT 0,
-  position    SMALLINT        NOT NULL DEFAULT 0,
-
-  PRIMARY KEY (id),
-  KEY ix_qo_question (question_id, position),
-  CONSTRAINT fk_qo_question FOREIGN KEY (question_id) REFERENCES quiz_questions (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE quiz_attempts (
-  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  quiz_id       BIGINT UNSIGNED NOT NULL,
-  user_id       BIGINT UNSIGNED NOT NULL,
-  attempt_no    TINYINT UNSIGNED NOT NULL DEFAULT 1,
-  started_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  submitted_at  DATETIME        NULL,        -- NULL = still open or abandoned
-  score_points  SMALLINT UNSIGNED NULL,
-  total_points  SMALLINT UNSIGNED NULL,
-  score_percent DECIMAL(5,2)    NULL,
-  passed        TINYINT(1)      NULL,
-
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_attempt (quiz_id, user_id, attempt_no),
-  KEY ix_attempt_user (user_id),
-  CONSTRAINT fk_att_quiz FOREIGN KEY (quiz_id) REFERENCES quizzes (id) ON DELETE CASCADE,
-  CONSTRAINT fk_att_user FOREIGN KEY (user_id) REFERENCES users (id)   ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- One row per question answered. Multi-select questions produce several rows
--- for the same question, which is why the primary key is not (attempt, question).
-CREATE TABLE quiz_answers (
-  id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  attempt_id     BIGINT UNSIGNED NOT NULL,
-  question_id    BIGINT UNSIGNED NOT NULL,
-  option_id      BIGINT UNSIGNED NULL,      -- for choice questions
-  text_answer    VARCHAR(500)    NULL,      -- for short_text
-  is_correct     TINYINT(1)      NULL,
-  points_awarded SMALLINT        NOT NULL DEFAULT 0,
-  answered_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-  PRIMARY KEY (id),
-  KEY ix_ans_attempt (attempt_id),
-  KEY ix_ans_question (question_id),
-  CONSTRAINT fk_ans_attempt  FOREIGN KEY (attempt_id)  REFERENCES quiz_attempts (id)  ON DELETE CASCADE,
-  CONSTRAINT fk_ans_question FOREIGN KEY (question_id) REFERENCES quiz_questions (id) ON DELETE CASCADE,
-  CONSTRAINT fk_ans_option   FOREIGN KEY (option_id)   REFERENCES quiz_options (id)   ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- ALL FIVE ASSESSMENT TABLES GRADUATED: quizzes, quiz_questions, quiz_options,
+-- quiz_attempts and quiz_answers now live in ledger.sql, created and written by
+-- lib/quiz.php, admin/quizzes.php and quiz.php. They left this file the day
+-- students could sit a paper.
+--
+-- Two things changed on the way across, and both are argued in ledger.sql
+-- rather than repeated here:
+--
+--   * `quizzes.lesson_id` was dropped. It pointed at `lessons`, which is still
+--     below in this file and still does not exist.
+--   * `quiz_questions.type` lost its 'short_text' member. Nothing can mark a
+--     free-text answer automatically, and this pass builds no marking queue to
+--     send one to.
+--
+-- What did NOT graduate, and is not designed here either: exercises, projects
+-- and file uploads. Those are a second pass. When they arrive they are their
+-- own tables — a project submission is a file and a human's mark, which shares
+-- nothing with a multiple-choice paper beyond the word "assessment".
 
 
 -- ===========================================================================

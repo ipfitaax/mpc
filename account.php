@@ -1,39 +1,41 @@
 <?php
 /**
- * Where a signed-in student lands. The whole of the signed-in area, currently.
+ * Where a signed-in student lands: who they are, what they are enrolled on, and
+ * the way out.
  *
- * WHY THIS PAGE IS SO SMALL, AND WHY IT SAYS SO
- * Google sign-in was built as sign-in and nothing else: there is no portal
- * behind it. No lessons, no recordings, no fee statement. Those tables are
- * designed in database/future.sql and nothing creates them.
+ * WHAT THIS PAGE USED TO SAY, AND WHY IT NO LONGER SAYS IT
+ * Until the quiz module existed this page told the student plainly that there
+ * was no portal behind the login — because there wasn't, and a page dressed up
+ * as a dashboard with nothing in it teaches a student that the portal is broken.
+ * That was the right thing to say then and it is the wrong thing to say now:
+ * there IS something behind the login, and a page still insisting otherwise
+ * would send students away from a quiz they are supposed to sit.
  *
- * So this page tells the student exactly that. The temptation is to dress it up
- * — a dashboard shell, some empty cards, "coming soon" tiles — and that is the
- * same mistake CLAUDE.md already names on the other side of the login: "a
- * message is not a login". Its mirror image is just as bad. A page that looks
- * like a portal and holds nothing teaches a student that the portal is broken,
- * which is worse than being told plainly that it is not built.
+ * The rule underneath both versions is the same one, and it is worth keeping
+ * where the next person to change this file will read it: this page says what is
+ * actually here. Not what is planned, not "coming soon" tiles. Recordings and
+ * fee statements are still not built, and this page does not imply they are.
  *
- * It also serves a second purpose that is not cosmetic: it is the only proof
- * a student has that signing in worked at all. The public pages are static
- * .html files rendered in the browser, so none of them can show a signed-in
- * state. Without this page, a successful Google login would be invisible.
+ * It also still serves its original second purpose. The public pages are static
+ * .html rendered in the browser and cannot show a signed-in state, so this is
+ * the only proof a student has that signing in worked at all.
  *
- * PHP, not a dc template, for the same reason lib/page.php is: this has to
- * render from the server's own session, and the dc runtime cannot see one.
+ * It is the sign-out endpoint for every student screen — lib/student-page.php
+ * posts here from the header — so the POST handler runs before any output.
  */
 
 declare(strict_types=1);
 
 require_once __DIR__ . '/lib/auth.php';
-require_once __DIR__ . '/lib/page.php';   // for e()
+require_once __DIR__ . '/lib/quiz.php';
+require_once __DIR__ . '/lib/student-page.php';
 
 mpc_session_start();
 
 // Sign out. POST with a CSRF token, never a GET — a GET logout can be fired by
-// any image tag on any page the student happens to open. Harmless here today,
-// but it is the same rule the office tool follows and having two rules is how
-// the wrong one gets copied later.
+// any image tag on any page the student happens to open. That was harmless when
+// this was the only signed-in page; it is not harmless now that signing out
+// mid-quiz abandons an attempt that has already been spent.
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['signout'])) {
     mpc_csrf_check();
     mpc_logout();
@@ -42,91 +44,93 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['signout'])
     exit;
 }
 
-$user = mpc_current_user();
+$user = mpc_require_student();
 
-if (! $user) {
-    header('Location: ./mpc-login.html', true, 302);
-    exit;
-}
+// What they are actually enrolled on. Shown because a student who cannot open a
+// quiz is usually a student whose enrolment is not what they think it is, and
+// this is the screen that answers that without a phone call.
+$stmt = mpc_db()->prepare(
+    'SELECT i.name AS intake_name, c.title AS course_title, e.status, i.starts_on
+       FROM enrollments e
+       JOIN intakes i ON i.id = e.intake_id
+       JOIN courses c ON c.id = i.course_id
+      WHERE e.user_id = ?
+      ORDER BY i.starts_on DESC'
+);
+$stmt->execute([(int) $user['id']]);
+$enrollments = $stmt->fetchAll();
 
-// Staff who somehow arrive here are sent to their own tool rather than shown a
-// student page. Their accounts cannot be reached by Google sign-in at all (see
-// lib/oauth.php), so this is only reachable by a staff member who signed in
-// with a password and then typed this URL — but a page that renders the wrong
-// role's view is worth closing off wherever it appears.
-if (in_array($user['role'], ['staff', 'admin'], true)) {
-    header('Location: ./office/admin/login.php', true, 302);
-    exit;
-}
+// Empty rather than fatal when the migration has not been run. This page is the
+// student's proof that signing in worked at all (see the note at the top), so it
+// is the last page that should be the one to break.
+$quizzes = mpc_quiz_tables_present() ? mpc_student_quiz_list((int) $user['id']) : [];
 
-$green   = '#24A68A';
-$text    = '#646965';
-$heading = '#1d1f20';
-$border  = '#e2e5e4';
+mpc_student_page_head('Your account', $user, 'account.php');
+?>
 
-$name  = e($user['full_name']);
-$email = e($user['email'] ?? '');
-$csrf  = e(mpc_csrf_token());
+<div class="card">
+  <h2>You are signed in</h2>
+  <p class="muted" style="margin:0">
+    <?= e($user['full_name']) ?><?php if ($user['email']): ?><br><?= e($user['email']) ?><?php endif; ?>
+  </p>
+</div>
 
-header('Content-Type: text/html; charset=utf-8');
+<div class="card">
+  <h2>Your enrolment</h2>
 
-echo <<<HTML
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Your account — MPC</title>
-<link rel="icon" href="./assets/favicon.ico" sizes="any">
-<style>
-  *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-       color:{$text};background:#fafafa;line-height:1.6}
-  a{color:{$green}}
-  h1{color:{$heading};font-size:1.5rem;font-weight:800;margin:0 0 6px}
-  .card{background:#fff;border:1px solid {$border};border-radius:6px;padding:28px}
-  .muted{color:#9aa09e;font-size:.9rem}
-  button{padding:12px 24px;border-radius:6px;font-weight:700;font-size:.95rem;
-         background:#fff;color:{$green};border:2px solid {$green};cursor:pointer;
-         font-family:inherit}
-  button:hover{background:{$green};color:#fff}
-</style>
-</head>
-<body>
-<header style="background:#fff;border-bottom:1px solid {$border}">
-  <div style="max-width:720px;margin:0 auto;padding:14px 24px">
-    <a href="./index.html" style="display:flex;align-items:center;gap:10px;
-       text-decoration:none;color:{$heading};font-weight:800">
-      <img src="./assets/logo-mark.png" alt="" style="height:40px;width:auto;display:block">
-      Mogadishu Professional Certificate
-    </a>
-  </div>
-</header>
-
-<main style="max-width:720px;margin:0 auto;padding:34px 24px 60px">
-  <div class="card">
-    <h1>You are signed in</h1>
-    <p class="muted" style="margin:0 0 22px">Signed in with Google as {$name}<br>{$email}</p>
-
-    <p style="margin:0 0 20px">
-      There is nothing to see here yet. The student portal — course materials,
-      recordings and fee statements — is not built. Signing in does not give you
-      access to anything at the moment; it only confirms who you are, so the
-      portal has something to build on when it exists.
-    </p>
-
-    <p style="margin:0 0 26px">
-      To ask about enrollment or your fees, use the
+  <?php if (! $enrollments): ?>
+    <p style="margin-bottom:0">
+      Your account is not linked to a class yet. Signing in confirms who you are;
+      it does not enrol you. To enrol, use the
       <a href="./index.html#apply-form">enrollment form</a> or call
       <strong>+252 770 51 90 98</strong>.
     </p>
+  <?php else: ?>
+    <table>
+      <thead><tr><th>Program</th><th>Intake</th><th>Starts</th><th>Status</th></tr></thead>
+      <tbody>
+        <?php foreach ($enrollments as $en): ?>
+          <tr>
+            <td><strong><?= e($en['course_title']) ?></strong></td>
+            <td><?= e($en['intake_name']) ?></td>
+            <td><?= e($en['starts_on'] ?? '') ?></td>
+            <td><?= e($en['status']) ?></td>
+          </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+    <p class="muted" style="margin-bottom:0">
+      Fees, receipts and attendance are not shown here &mdash; ask at the office
+      for those.
+    </p>
+  <?php endif; ?>
+</div>
 
-    <form method="post" action="./account.php" style="margin:0">
-      <input type="hidden" name="csrf" value="{$csrf}">
-      <button type="submit" name="signout" value="1">Sign out</button>
-    </form>
-  </div>
-</main>
-</body>
-</html>
-HTML;
+<div class="card">
+  <h2>Quizzes</h2>
+  <?php if ($quizzes): ?>
+    <p style="margin-bottom:0">
+      You have <strong><?= count($quizzes) ?></strong>
+      quiz<?= count($quizzes) === 1 ? '' : 'zes' ?> available.
+      <a href="./quizzes.php">Go to your quizzes</a>.
+    </p>
+  <?php else: ?>
+    <p style="margin-bottom:0">
+      Nothing to sit at the moment. When an instructor publishes a quiz for a
+      course you are enrolled on, it appears under
+      <a href="./quizzes.php">Quizzes</a>.
+    </p>
+  <?php endif; ?>
+</div>
+
+<div class="card">
+  <h2>What is not here</h2>
+  <p style="margin-bottom:0">
+    Course materials, class recordings and fee statements are not built. This
+    page is not hiding them from you &mdash; they do not exist yet. For anything
+    about fees or enrolment, call <strong>+252 770 51 90 98</strong>.
+  </p>
+</div>
+
+<?php
+mpc_student_page_foot();

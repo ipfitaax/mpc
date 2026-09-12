@@ -141,3 +141,86 @@ matter.
 **Depends on / blocked by.** Nothing technical. `mpc-login.html` and
 `mpc-register.html` are already built as honest placeholders and are where this
 would land.
+
+---
+
+## 4. The points-total index, deferred until the query exists
+
+**What.** Add a covering index on `quiz_attempts` for the points-total query,
+once that query has actually been written.
+
+**Why.** It runs on every `account.php` load for a signed-in student. It wants
+an index shaped to it. Nobody knows its shape yet.
+
+**Why it is not in `004-quiz-engine.sql`.** It nearly was. The plan originally
+scored points as `SUM` of the best attempt per quiz, and an index of
+`(user_id, quiz_id, score_points)` was written into the migration to serve that
+grouped-maximum query. Review then changed the scoring rule to **first attempt
+only** — because `quiz_questions.explanation` is shown after submission, so with
+unlimited attempts and best-attempt scoring every student reaches 100% by
+retaking, and points would measure persistence rather than knowledge. That
+change deleted the query the index was for. Shipping it anyway would have put a
+line in the schema whose stated reason was already false.
+
+**Where to start.** Under first-attempt scoring the query is a per-quiz lookup
+of the earliest attempt, so the index probably wants `(user_id, quiz_id,
+attempt_no)` — and may already be served by `uq_attempt`. **Measure before
+adding.** Do not re-derive this from a slow page; the shape depends entirely on
+how the points function ends up written.
+
+**Depends on / blocked by.** The classroom visit answering what points mean at
+all, then `lib/quiz.php`'s points function existing. If points turn out to mean
+nothing to MPC, this is moot and the whole points screen is not built.
+
+---
+
+## 5. Per-teacher course scoping (`intake_instructors`)
+
+**DO THIS BEFORE THE SECOND INSTRUCTOR ACCOUNT EXISTS, NOT AFTER.**
+
+**What.** Graduate `intake_instructors` from `future.sql` and scope
+`teach/quizzes.php` so an instructor sees only the courses they teach.
+
+**Why.** v1 deliberately ships without it: every signed-in instructor sees every
+course and can edit any quiz in it. With one authoring teacher that is fine and
+simpler. With two it means one teacher can silently overwrite another's work,
+with nothing recording that they did.
+
+**The non-obvious half.** The query is a join and a where clause. The real cost
+is a screen for the office to assign instructors to intakes, because **nothing
+today assigns a teacher to an intake at all**. That screen is a small product of
+its own and nobody has designed it.
+
+**Note on `created_by`.** `quizzes.created_by` is added in `004` so an author can
+see their own unpublished work. That is authorship, not permission. Scoping is
+what would turn it into permission. Do not mistake one for the other.
+
+**Depends on / blocked by.** Nothing technical. The trigger is organisational:
+the moment MPC wants a second person authoring.
+
+---
+
+## 6. `quiz_attempts.enrollment_id` — a decision with an expiry date
+
+**THIS EXPIRES WHEN `004-quiz-engine.sql` RUNS. After that it is effectively
+permanent, because `quiz_attempts` is append-only and its rows can never be
+rewritten.**
+
+**What.** Store `enrollment_id` on `quiz_attempts` instead of `user_id`.
+
+**Why.** As designed, "every attempt belongs to a student enrolled in that
+quiz's course" is a query you run, not a rule the database enforces. Pointing
+attempts at the enrolment makes the bad state unrepresentable. It also turns
+Success Criterion 3 from an assertion into a foreign key, and shortens every
+join to intake and course.
+
+**Why it was not simply done.** A student enrolled in two intakes of the same
+course has two enrolments, and the code would have to choose one. Every query
+in the design doc is written against `user_id`. Neither is hard; both are real.
+
+**Context.** This exists because of P6: `lib/oauth.php` creates a `users` row for
+any Google account that signs in, and that row has no enrolment behind it. The
+whole Step 0 linking action exists to attach one. Referencing the enrolment
+directly is the stronger version of that same fix.
+
+**Depends on / blocked by.** Nothing. It must be decided before `004` runs.
