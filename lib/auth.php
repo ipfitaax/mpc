@@ -69,8 +69,23 @@ function mpc_session_start(): void
         'path'     => '/',
         'httponly' => true,       // script cannot read it, so XSS cannot steal it
         'secure'   => $https,
-        'samesite' => 'Strict',   // not sent on cross-site requests at all,
-                                  // which is a second line behind the CSRF token
+        // `Lax`, not `Strict`, and Google sign-in is the reason.
+        //
+        // Strict withholds the cookie from any request whose initiator is
+        // another site — including the top-level redirect Google sends the
+        // browser back on at the end of sign-in. So the callback ran with a
+        // brand-new empty session, found no `google_state` in it, and told
+        // every visitor "That sign-in link has expired. Please try again."
+        // Nothing had expired and trying again did exactly the same thing:
+        // the state was never readable on the way back, so Google sign-in
+        // could not succeed for anybody, not once.
+        //
+        // Lax still withholds it from cross-site POSTs and from sub-resource
+        // loads, which is the part that was doing the work. It sends it on a
+        // top-level GET navigation, which is precisely and only what the
+        // OAuth return leg is. The CSRF token stays the actual defence; this
+        // flag was only ever the second line behind it.
+        'samesite' => 'Lax',
     ]);
 
     session_start();
@@ -327,7 +342,7 @@ function mpc_logout(): void
             'domain'   => $p['domain'],
             'secure'   => $p['secure'],
             'httponly' => $p['httponly'],
-            'samesite' => $p['samesite'] ?? 'Strict',
+            'samesite' => $p['samesite'] ?? 'Lax',
         ]);
     }
 
