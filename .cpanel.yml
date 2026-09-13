@@ -27,6 +27,30 @@
 #   server and are gitignored; nothing here writes over them.
 # - admin/, lib/, bin/, database/ — the office ledger. See the block at the
 #   bottom; it is commented out on purpose, not forgotten.
+# NO ABSOLUTE PATHS TO COREUTILS. `cp`, not `/bin/cp`.
+#
+# Every copy task below used to be spelled /bin/cp, and on this host that is
+# not where cp is: the deploy died on the first one with
+#
+#     /bin/cp: No such file or directory
+#
+# cPanel stops at the first failing task, so the first cp took the whole deploy
+# with it — every file, every commit, since this file was written. That is the
+# real reason nothing has ever reached mpc.so, and it hid two other bugs behind
+# it: DEPLOYPATH was wrong twice over, and neither wrong value could produce a
+# visible symptom, because no cp was ever reached to act on either one. Fixing
+# DEPLOYPATH alone changed nothing and looked like it had failed again.
+#
+# The host already said this once. The note further down records a deploy that
+# died with "/bin/sh: bad interpreter: no such file", and /bin/sh missing is
+# the same fact about the same directory — /bin is not the standard symlink
+# here. That was read as a quirk of `sh` rather than as a statement about /bin,
+# and the 29 other absolute paths in this file went unexamined for it.
+#
+# So: let PATH resolve them. These tasks already run in a shell — that is why
+# `export DEPLOYPATH` on the first line reaches the last — and a shell on any
+# host can find its own coreutils. An absolute path here buys nothing and
+# stakes the entire deploy on a filesystem layout this repo cannot see.
 deployment:
   tasks:
     # RESOLVE the document root; do not assert it.
@@ -90,33 +114,33 @@ deployment:
     # The marketing site and the sub-pages. Every .html file is a whole page:
     # they are client-rendered dc templates with their content inlined, so one
     # missing file is one missing page, not a broken include.
-    - /bin/cp -a index.html $DEPLOYPATH/
-    - /bin/cp -a course-basic-ai.html $DEPLOYPATH/
-    - /bin/cp -a course-basic-computers.html $DEPLOYPATH/
-    - /bin/cp -a course-basic-python.html $DEPLOYPATH/
-    - /bin/cp -a course-computer-networking.html $DEPLOYPATH/
-    - /bin/cp -a course-cybersecurity.html $DEPLOYPATH/
-    - /bin/cp -a course-data-analysis.html $DEPLOYPATH/
-    - /bin/cp -a course-database-management.html $DEPLOYPATH/
-    - /bin/cp -a course-web-design.html $DEPLOYPATH/
-    - /bin/cp -a mpc-login.html $DEPLOYPATH/
-    - /bin/cp -a mpc-register.html $DEPLOYPATH/
-    - /bin/cp -a mpc-forgot-password.html $DEPLOYPATH/
+    - cp -a index.html $DEPLOYPATH/
+    - cp -a course-basic-ai.html $DEPLOYPATH/
+    - cp -a course-basic-computers.html $DEPLOYPATH/
+    - cp -a course-basic-python.html $DEPLOYPATH/
+    - cp -a course-computer-networking.html $DEPLOYPATH/
+    - cp -a course-cybersecurity.html $DEPLOYPATH/
+    - cp -a course-data-analysis.html $DEPLOYPATH/
+    - cp -a course-database-management.html $DEPLOYPATH/
+    - cp -a course-web-design.html $DEPLOYPATH/
+    - cp -a mpc-login.html $DEPLOYPATH/
+    - cp -a mpc-register.html $DEPLOYPATH/
+    - cp -a mpc-forgot-password.html $DEPLOYPATH/
 
     # All three .js files are required and a missing one fails QUIETLY, which is
     # why they are listed one by one rather than as a glob: support.js absent is
     # a blank page, api-form.js absent leaves the enquiry button stuck on
     # "Sending…" while the page still looks alive. A glob that silently matches
     # two of three would reproduce exactly the bug README warns about.
-    - /bin/cp -a support.js $DEPLOYPATH/
-    - /bin/cp -a image-slot.js $DEPLOYPATH/
-    - /bin/cp -a api-form.js $DEPLOYPATH/
+    - cp -a support.js $DEPLOYPATH/
+    - cp -a image-slot.js $DEPLOYPATH/
+    - cp -a api-form.js $DEPLOYPATH/
 
     # The signed-in student page. It is PHP rather than one of the .html pages
     # above because it renders from the server's own session, which the dc
     # runtime cannot see. Without this file a successful Google sign-in lands
     # on a 404 — the flow works and looks broken.
-    - /bin/cp -a account.php $DEPLOYPATH/
+    - cp -a account.php $DEPLOYPATH/
 
     # The student side of the quiz module. Same reason as account.php: these
     # render from the server's session and the dc runtime cannot see one.
@@ -130,21 +154,21 @@ deployment:
     # and read the block at the bottom first, because admin/ carries no deny
     # rule and needs mpc-config.php above public_html or it throws a fatal
     # error at a visitor.
-    - /bin/cp -a quizzes.php $DEPLOYPATH/
-    - /bin/cp -a quiz.php $DEPLOYPATH/
+    - cp -a quizzes.php $DEPLOYPATH/
+    - cp -a quiz.php $DEPLOYPATH/
 
     # verify.php and the rewrite that makes mpc.so/verify work. The receipt slip
     # is printed with that URL on it, so the .htaccess is not optional cosmetics
     # — without it every printed receipt points at a 404.
-    - /bin/cp -a verify.php $DEPLOYPATH/
-    - /bin/cp -a .htaccess $DEPLOYPATH/
+    - cp -a verify.php $DEPLOYPATH/
+    - cp -a .htaccess $DEPLOYPATH/
 
     # lib/ is already live and verify.php requires lib/db.php and lib/ledger.php
     # at load, so it deploys with the public site rather than with the office:
     # shipping verify.php without its library is a 500 on a URL printed on paper
     # receipts.
-    - /bin/mkdir -p $DEPLOYPATH/assets $DEPLOYPATH/uploads $DEPLOYPATH/api $DEPLOYPATH/storage $DEPLOYPATH/lib
-    - /bin/cp -a lib/. $DEPLOYPATH/lib/
+    - mkdir -p $DEPLOYPATH/assets $DEPLOYPATH/uploads $DEPLOYPATH/api $DEPLOYPATH/storage $DEPLOYPATH/lib
+    - cp -a lib/. $DEPLOYPATH/lib/
 
     # Belt and braces on the local development database password.
     # config.local.php is gitignored, so cPanel's clone will not contain it and
@@ -155,10 +179,10 @@ deployment:
     # keeps its credentials in mpc-config.php ABOVE public_html, so a
     # config.local.php inside the web root is always wrong and always safe to
     # remove.
-    - /bin/rm -f $DEPLOYPATH/lib/config.local.php
-    - /bin/cp -a assets/. $DEPLOYPATH/assets/
-    - /bin/cp -a uploads/. $DEPLOYPATH/uploads/
-    - /bin/cp -a api/. $DEPLOYPATH/api/
+    - rm -f $DEPLOYPATH/lib/config.local.php
+    - cp -a assets/. $DEPLOYPATH/assets/
+    - cp -a uploads/. $DEPLOYPATH/uploads/
+    - cp -a api/. $DEPLOYPATH/api/
 
     # ---------------------------------------------------------------------
     # The office tool. Deployed as of this commit; it was left out until now.
@@ -193,14 +217,14 @@ deployment:
     # staff actually open stale, and hand this repo two copies to keep in step
     # with no way to tell from the outside which one someone is logged into.
     # The link in the login page is the spec; this follows it.
-    - /bin/mkdir -p $DEPLOYPATH/office/admin
-    - /bin/cp -a admin/. $DEPLOYPATH/office/admin/
+    - mkdir -p $DEPLOYPATH/office/admin
+    - cp -a admin/. $DEPLOYPATH/office/admin/
 
     # ONLY the deny rule, never the .jsonl files beside it. Enquiries written on
     # the server are the live copy; the repo has no business overwriting them.
     # The rule is re-copied every deploy because the day it goes missing is the
     # day storage/enquiries.jsonl is served to anyone who asks for it.
-    - /bin/cp -a storage/.htaccess $DEPLOYPATH/storage/
+    - cp -a storage/.htaccess $DEPLOYPATH/storage/
 
     # The deploy stamp. Deploying here is two manual clicks in cPanel and there
     # is no CLI, so "is mpc.so actually running the commit I pushed?" otherwise
