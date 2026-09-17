@@ -29,67 +29,55 @@
 #   bottom; it is commented out on purpose, not forgotten.
 # NO ABSOLUTE PATHS TO COREUTILS. `cp`, not `/bin/cp`.
 #
-# Every copy task below used to be spelled /bin/cp, and on this host that is
-# not where cp is: the deploy died on the first one with
+# Every copy task below used to be spelled /bin/cp. They are bare now because a
+# bare name is right on every host and an absolute one is right only on hosts
+# laid out as assumed — and this file has already been burned twice by assuming
+# a path it could not see.
+#
+# HONESTY ABOUT WHY THIS CHANGED, because the commit that did it claims more
+# than it could prove. It was made on the strength of a reported
 #
 #     /bin/cp: No such file or directory
 #
-# cPanel stops at the first failing task, so the first cp took the whole deploy
-# with it — every file, every commit, since this file was written. That is the
-# real reason nothing has ever reached mpc.so, and it hid two other bugs behind
-# it: DEPLOYPATH was wrong twice over, and neither wrong value could produce a
-# visible symptom, because no cp was ever reached to act on either one. Fixing
-# DEPLOYPATH alone changed nothing and looked like it had failed again.
+# which would have been decisive: cPanel stops at the first failing task, so a
+# missing cp would take the whole deploy with it and explain every silent
+# no-op at once. But that output cannot have come from this account — Git
+# Version Control had no repository configured at the time, so no deploy had
+# ever run to produce it. So /bin/cp may never have been missing at all, and
+# the real cause of those no-ops was almost certainly the DEPLOYPATH below.
 #
-# The host already said this once. The note further down records a deploy that
-# died with "/bin/sh: bad interpreter: no such file", and /bin/sh missing is
-# the same fact about the same directory — /bin is not the standard symlink
-# here. That was read as a quirk of `sh` rather than as a statement about /bin,
-# and the 29 other absolute paths in this file went unexamined for it.
+# The change stays anyway, on its own merit rather than that story: these tasks
+# run in a shell — which is why `export DEPLOYPATH` on the first line reaches
+# the last — and a shell finds its own coreutils anywhere. There is a genuine
+# data point nearby, too: the note further down records a deploy that died on
+# "/bin/sh: bad interpreter: no such file", so /bin on this host is at least
+# not certainly the standard symlink.
 #
-# So: let PATH resolve them. These tasks already run in a shell — that is why
-# `export DEPLOYPATH` on the first line reaches the last — and a shell on any
-# host can find its own coreutils. An absolute path here buys nothing and
-# stakes the entire deploy on a filesystem layout this repo cannot see.
+# What is worth keeping is the lesson rather than the diagnosis: a fix built on
+# one unverified line of output looks exactly like a fix built on evidence, and
+# both of them get committed with the same confidence.
 deployment:
   tasks:
-    # RESOLVE the document root; do not assert it.
+    # $HOME/public_html. READ OFF cPanel → Domains → Document Root for mpc.so,
+    # not inferred, not assumed: /home/mpcso/public_html.
     #
-    # This line has now been wrong twice, in opposite directions, and each time
-    # the deploy reported success while changing nothing on mpc.so. First it was
-    # $HOME/public_html; then it was "fixed" to $HOME/public_html/mpc.so on the
-    # strength of a guess, and that was wrong too — mpc.so/mpc.so/index.html is
-    # a 404, so the files were landing outside the served tree either way.
+    # This line has been wrong twice and neither miss was visible from outside.
+    # It started as $HOME/public_html, was "fixed" to $HOME/public_html/mpc.so
+    # on the strength of a guess about addon-domain layout, and the guess was
+    # backwards — the original value had been right all along. The second miss
+    # then got blamed for deploys that were failing for an unrelated reason,
+    # which is how a correct line came to be changed into a wrong one.
     #
-    # Note in particular what the first miss cost. build.txt was added precisely
-    # to answer "is the live site current?", and it could not answer it: it was
-    # being written to ~/public_html/build.txt, so mpc.so/build.txt returned 404
-    # — exactly what it returns when the task never ran. The one signal designed
-    # to tell those two cases apart was written through the same broken variable
-    # as everything it was reporting on.
+    # It was also briefly replaced by a three-step resolver that asked cPanel's
+    # userdata, then searched $HOME for the directory containing office/. That
+    # is gone. It existed only because nobody had looked the value up, and a
+    # lookup that can return a plausible wrong answer is worse than a constant
+    # that is checked — it would have found ~/public_html/mpc.so, a directory
+    # left behind by the earlier broken deploys, and passed the guard with it.
     #
-    # Two hardcoded guesses and two silent no-op deploys is enough. A path that
-    # has to match a server setting nobody here can see is not a constant, so it
-    # stops being written as one. The three steps below ask the host, then look,
-    # then fall back — and the guard after them refuses to continue on a
-    # directory that does not exist, which is the part that was missing.
-    #
-    # 1. cPanel's own answer. /var/cpanel/userdata/$USER/mpc.so carries the
-    #    domain's `documentroot:` and is the same value the Domains screen
-    #    shows. When it is readable this is not a heuristic at all.
-    - export DEPLOYPATH=$(awk '/^documentroot:/ {print $2}' /var/cpanel/userdata/$USER/mpc.so 2>/dev/null)
-
-    # 2. Failing that, find the tree already being served. office/ is the office
-    #    tool's directory, created by hand on this host and NOT by this file —
-    #    mpc-login.html links staff to mpc.so/office and that URL answers 200,
-    #    so whatever directory contains office/ is the document root. The clone
-    #    is excluded by path because it must never match itself; the repo has no
-    #    office/ of its own today, and -not -path keeps that from mattering if
-    #    it ever grows one.
-    - test -n "$DEPLOYPATH" || export DEPLOYPATH=$(find $HOME -maxdepth 4 -type d -name office -not -path "*/repositories/*" -printf '%h\n' 2>/dev/null | head -1)
-
-    # 3. Last resort, the cPanel default.
-    - test -n "$DEPLOYPATH" || export DEPLOYPATH=$HOME/public_html
+    # The rule this leaves: if mpc.so ever moves, read the new value off the
+    # Domains screen and change this line. Do not derive it.
+    - export DEPLOYPATH=$HOME/public_html
 
     # No colon-space in this string, deliberately. These tasks are YAML plain
     # scalars, and `- echo "mpc deploy: X"` parses as a MAPPING whose key is
@@ -97,18 +85,16 @@ deployment:
     # or rejects the file outright. Cheap to avoid, invisible when it bites.
     - echo "mpc deploy DEPLOYPATH=$DEPLOYPATH"
 
-    # THE GUARD, and the whole point of the rewrite above.
+    # THE GUARD. cPanel stops on the first task that fails, so a bare `test -d`
+    # ends the deploy visibly when the target is not there — rather than every
+    # cp below "succeeding" into a directory cp had just created out of thin
+    # air, which is what produced two clean green deploys that moved nothing.
     #
-    # cPanel stops on the first task that fails, so a bare `test -d` ends the
-    # deploy with a visible failure when the root cannot be resolved. That is
-    # strictly better than what happened twice: every cp below "succeeding" into
-    # a directory cp had just created out of thin air, and cPanel printing a
-    # clean green result for a deploy that moved nothing.
-    #
-    # Note what this still cannot catch — a directory that exists and is not the
-    # one Apache serves. Nothing running inside the host can catch that. Only
-    # fetching a file over HTTP can, which is why build.txt is stamped last and
-    # why the health check in CLAUDE.md compares it against HEAD.
+    # Note what this cannot catch: a directory that exists and is not the one
+    # Apache serves. Nothing running inside the host can catch that, which is
+    # exactly the case that cost the most time here. Only fetching a file over
+    # HTTP can, which is why build.txt is stamped last and why the health check
+    # in CLAUDE.md compares it against HEAD.
     - test -d "$DEPLOYPATH"
 
     # The marketing site and the sub-pages. Every .html file is a whole page:
