@@ -31,6 +31,21 @@ const MPC_LOGIN_MAX_FAILURES  = 8;
 const MPC_LOGIN_WINDOW_MINUTES = 15;
 
 /**
+ * Where a "someone signed in" notice goes. See mpc_notify_login().
+ *
+ * SET MPC_LOGIN_NOTIFY_TO TO '' TO SWITCH THE NOTICES OFF. That is the whole
+ * off switch, and it is here rather than in a config file because turning it
+ * off is a decision about the office's inbox, not about a deployment — every
+ * deployment of this site wants the same answer.
+ *
+ * The From address must stay on mpc.so: that domain's SPF authorises this host
+ * to send as it. Moving it to a Gmail or any other domain does not degrade
+ * delivery, it ends it — the mail is rejected rather than filed in spam.
+ */
+const MPC_LOGIN_NOTIFY_TO   = 'info@mpc.so';
+const MPC_LOGIN_NOTIFY_FROM = 'info@mpc.so';
+
+/**
  * The roles that sign in with a password, at admin/login.php.
  *
  * ONE list, in one place, because it is read by three files that must never
@@ -274,7 +289,7 @@ function mpc_log_login_attempt(
  * password path had this from the start; the Google path must not be the one
  * that forgets, and the way to guarantee that is to leave it nowhere to forget.
  */
-function mpc_establish_session(int $userId): void
+function mpc_establish_session(int $userId, string $method = 'password'): void
 {
     mpc_session_start();
     session_regenerate_id(true);
@@ -282,6 +297,89 @@ function mpc_establish_session(int $userId): void
 
     mpc_db()->prepare("UPDATE users SET last_login_at = NOW() WHERE id = ?")
             ->execute([$userId]);
+
+    // LAST, and unable to affect anything above it. See mpc_notify_login().
+    mpc_notify_login($userId, $method);
+}
+
+/**
+ * Emails the office that someone signed in.
+ *
+ * WHY IT LIVES HERE rather than in the two login pages. This is the one
+ * function both routes already go through, for the session-fixation reason
+ * above, so a notice written here cannot be the thing the newer route forgets
+ * — which is the same argument that put session_regenerate_id() here, applied
+ * to a smaller matter.
+ *
+ * THE SAVE-THEN-NOTIFY RULE, pointed at a login. api/enquiry.php writes the
+ * lead to disk before it tries to mail anyone, because a lead that only ever
+ * existed inside a failed mail() call is gone forever. The same order holds
+ * here for a stronger reason: the session is already established and the row
+ * already written when this runs, so a mail server that is down, slow, or
+ * missing cannot cost anyone their login. Everything here is inside a
+ * try/catch and a @mail for exactly that — a student signing in must never see
+ * a failure that belongs to the office's inbox.
+ *
+ * WHAT IT DELIBERATELY DOES NOT DO: it does not report failed attempts. Those
+ * are already recorded in login_attempts, they are far more numerous, and an
+ * inbox that fills with them is an inbox nobody reads — at which point the
+ * successful-login notices are lost too. Query that table when you want to see
+ * failures; this is for knowing who actually got in.
+ *
+ * TO TURN IT OFF, set MPC_LOGIN_NOTIFY_TO to ''. Nothing else needs touching.
+ */
+function mpc_notify_login(int $userId, string $method): void
+{
+    if (MPC_LOGIN_NOTIFY_TO === '') {
+        return;
+    }
+
+    try {
+        $stmt = mpc_db()->prepare("SELECT full_name, email, role FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+
+        if (! $user) {
+            return;
+        }
+
+        $body = "Someone signed in to mpc.so.\n\n"
+              . '  Name   : ' . ($user['full_name'] ?: '—') . "\n"
+              . '  Email  : ' . ($user['email'] ?: '—') . "\n"
+              . '  Role   : ' . $user['role'] . "\n"
+              . '  Method : ' . ($method === 'google' ? 'Google sign-in' : 'password') . "\n"
+              . '  Time   : ' . date('D j M Y, H:i') . "\n"
+              . '  IP     : ' . (mpc_client_ip() ?: '—') . "\n\n"
+              . "Recorded in login_attempts either way; this email is a courtesy copy.\n";
+
+        // From must be an mpc.so address. The domain's SPF authorises this host
+        // for it, so the mail authenticates; a From on any other domain is
+        // rejected outright by Gmail. Same constraint as api/enquiry.php, and
+        // the same reason.
+        $headers = [
+            'From: Mogadishu Professional Certificate <' . MPC_LOGIN_NOTIFY_FROM . '>',
+            'Content-Type: text/plain; charset=utf-8',
+        ];
+
+        // The signed-in person's address is NOT put in Reply-To. enquiry.php
+        // does that because replying to an enquiry is the point; replying to a
+        // login notice is not, and a header built from a value this code did
+        // not validate is how header injection gets in.
+        $sent = @mail(
+            MPC_LOGIN_NOTIFY_TO,
+            'mpc.so sign-in: ' . ($user['full_name'] ?: $user['email']),
+            $body,
+            implode("\r\n", $headers)
+        );
+
+        if (! $sent) {
+            // Expected on local XAMPP, which has no mail server at all.
+            error_log('[mpc][login-notify] mail to ' . MPC_LOGIN_NOTIFY_TO . ' failed');
+        }
+    } catch (Throwable $e) {
+        // A notice is never worth a failed login. Swallow, log, carry on.
+        error_log('[mpc][login-notify] ' . $e->getMessage());
+    }
 }
 
 /** See the caveat in mpc_login_is_rate_limited(). */

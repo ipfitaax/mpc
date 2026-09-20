@@ -108,7 +108,7 @@ if ($userId === null) {
     mpc_google_fail($linkError ?? $generic, 'link refused: ' . ($linkError ?? 'unknown'));
 }
 
-mpc_establish_session($userId);
+mpc_establish_session($userId, 'google');
 mpc_log_login_attempt($email, $userId, true, 'google');
 
 header('Location: ../../../account.php', true, 302);
