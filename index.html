@@ -15,12 +15,12 @@
 <script src="./image-slot.js"></script>
 <script src="./api-form.js"></script>
 <style>
-/* The floating WhatsApp button shrinks to just its icon on a phone.
-   At 390px the labelled pill is 142px wide and sits over the contact card while
-   you read it. Nothing is permanently hidden — the page scrolls behind it, and
-   it does not cover the enquiry form's submit button, which was the one overlap
-   that would actually cost a student. But a circle is enough: the WhatsApp
-   glyph in WhatsApp green needs no caption to be understood.
+/* The floating WhatsApp launcher, a little smaller on a phone.
+   The labelled pill this replaced was 142px wide and sat over the contact card
+   while you read it; the circle does not, and the WhatsApp glyph in WhatsApp
+   green needs no caption to be understood. It still does not cover the enquiry
+   form's submit button, which was the one overlap that would actually cost a
+   student.
 
    A media query rather than an inline style, because inline styles cannot carry
    breakpoints and this is the only element on the page that needs one.
@@ -30,12 +30,18 @@
    class attribute on the element with it — a `class="wa-fab"` here silently
    became `class="scp8"` and the media query matched nothing. The aria-label is
    already required for the button to be usable without sight, so it is a
-   selector that cannot drift away from the element it names. */
+   selector that cannot drift away from the element it names.
+
+   NOTE it is now a `button`, not an `a`. It opens the greeting card rather than
+   leaving for wa.me, so the element changed and this selector had to change
+   with it — a rule still reading `a[aria-label=...]` would match nothing and
+   fail silently, which is exactly how the class version failed before. And do
+   NOT reintroduce a `span { display:none }` rule here: the span inside the
+   button is now the green presence dot, not a text label. */
 @media (max-width: 560px) {
-  a[aria-label="Message MPC on WhatsApp"] {
-    padding: 14px !important; right: 14px !important; bottom: 14px !important;
+  button[aria-label="Message MPC on WhatsApp"] {
+    width: 56px !important; height: 56px !important;
   }
-  a[aria-label="Message MPC on WhatsApp"] span { display: none; }
 }
 
 /* Hero slides: show the WHOLE photograph, not a crop of it.
@@ -736,21 +742,73 @@ h1,h2,h3,h4,header{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-ser
      Inline SVG, no external request — the same rule the rest of this page
      follows, and the reason it still renders something useful when the network
      is poor. -->
-<a href="https://wa.me/252770519098?text=Hello%20MPC%2C%20I%20would%20like%20to%20ask%20about%20your%20IT%20training%20programs."
-   target="_blank" rel="noopener" aria-label="Message MPC on WhatsApp"
-   style="position:fixed;right:20px;bottom:20px;z-index:60;display:inline-flex;align-items:center;gap:10px;
-          padding:14px 20px;border-radius:999px;background:#25D366;color:#fff;font-weight:700;font-size:.95rem;
-          text-decoration:none;box-shadow:0 6px 20px rgba(0,0,0,.18)"
-   style-hover="background:#1DA851">
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex:0 0 auto"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.13h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.17 8.17 0 0 1-1.26-4.36c0-4.53 3.7-8.22 8.24-8.22 2.2 0 4.27.86 5.82 2.41a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.21-8.24 8.21zm4.52-6.15c-.25-.12-1.47-.72-1.69-.8-.23-.09-.39-.13-.56.12-.16.25-.64.8-.79.97-.14.16-.29.18-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.39.11-.51.11-.11.25-.29.37-.44.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.16 0-.43.06-.66.31-.22.25-.86.85-.86 2.07s.89 2.4 1.01 2.56c.12.17 1.74 2.66 4.22 3.73.59.25 1.05.4 1.41.52.59.19 1.13.16 1.56.1.47-.07 1.47-.6 1.68-1.18.2-.58.2-1.07.14-1.18-.06-.11-.22-.17-.47-.29z"/></svg>
-  <span>WhatsApp</span>
-</a>
+<div style="position:fixed;right:20px;bottom:20px;z-index:60;display:flex;flex-direction:column;align-items:flex-end;gap:14px">
+
+  <!-- The greeting card. Shown only once the student asks for it, because a
+       panel that opens itself over the page is the thing people close without
+       reading — and the close is then the last interaction they have with us.
+
+       Note what is NOT state-dependent: the green button below is a real <a>
+       to wa.me. The card decides whether it is visible; it does not stand
+       between the student and WhatsApp. If React never mounted, the launcher
+       still works, which is the same reason the Google sign-in button is a
+       plain link. -->
+  <sc-if value="{{ waOpen }}">
+    <div style="position:relative;width:308px;max-width:calc(100vw - 40px);background:#fff;border-radius:18px;
+                box-shadow:0 14px 38px rgba(0,0,0,.18);padding:22px">
+
+      <button onclick="{{ toggleWhatsapp }}" aria-label="Close"
+              style="position:absolute;top:-12px;right:-12px;width:32px;height:32px;border-radius:999px;border:none;
+                     background:#fff;color:#646965;box-shadow:0 2px 10px rgba(0,0,0,.16);cursor:pointer;
+                     font-size:.95rem;line-height:1;display:flex;align-items:center;justify-content:center;padding:0"
+              style-hover="color:#1d1f20">&#10005;</button>
+
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="flex:0 0 auto;width:46px;height:46px;border-radius:999px;background:#25D366;color:#fff;
+                    display:flex;align-items:center;justify-content:center">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.13h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.17 8.17 0 0 1-1.26-4.36c0-4.53 3.7-8.22 8.24-8.22 2.2 0 4.27.86 5.82 2.41a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.21-8.24 8.21zm4.52-6.15c-.25-.12-1.47-.72-1.69-.8-.23-.09-.39-.13-.56.12-.16.25-.64.8-.79.97-.14.16-.29.18-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.39.11-.51.11-.11.25-.29.37-.44.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.16 0-.43.06-.66.31-.22.25-.86.85-.86 2.07s.89 2.4 1.01 2.56c.12.17 1.74 2.66 4.22 3.73.59.25 1.05.4 1.41.52.59.19 1.13.16 1.56.1.47-.07 1.47-.6 1.68-1.18.2-.58.2-1.07.14-1.18-.06-.11-.22-.17-.47-.29z"/></svg>
+        </div>
+        <div>
+          <div style="font-weight:700;color:#1d1f20;font-size:1rem;line-height:1.3">MPC Support</div>
+        </div>
+      </div>
+
+      <div style="background:#f4f6f5;border-radius:14px;padding:16px 17px;margin-bottom:18px">
+        <div style="font-weight:700;color:#1d1f20;font-size:1rem;margin-bottom:9px">Asw &#128075;</div>
+        <div style="color:#646965;font-size:.94rem;line-height:1.62">
+          <div>Tababar casri ah oo IT ah</div>
+          <div>Macallimiin khibrad U leh</div>
+          <div>Dhis mashaariic dhab ah</div>
+          <div style="margin-top:10px">Walal nala soo xiriir</div>
+        </div>
+      </div>
+
+      <a href="https://wa.me/252770519098?text=Hello%20MPC%2C%20I%20would%20like%20to%20ask%20about%20your%20IT%20training%20programs."
+         target="_blank" rel="noopener"
+         style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;border-radius:10px;
+                background:#25D366;color:#fff;font-weight:700;font-size:1rem;text-decoration:none"
+         style-hover="background:#1DA851">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex:0 0 auto"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.13h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.17 8.17 0 0 1-1.26-4.36c0-4.53 3.7-8.22 8.24-8.22 2.2 0 4.27.86 5.82 2.41a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.21-8.24 8.21zm4.52-6.15c-.25-.12-1.47-.72-1.69-.8-.23-.09-.39-.13-.56.12-.16.25-.64.8-.79.97-.14.16-.29.18-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.39.11-.51.11-.11.25-.29.37-.44.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.16 0-.43.06-.66.31-.22.25-.86.85-.86 2.07s.89 2.4 1.01 2.56c.12.17 1.74 2.66 4.22 3.73.59.25 1.05.4 1.41.52.59.19 1.13.16 1.56.1.47-.07 1.47-.6 1.68-1.18.2-.58.2-1.07.14-1.18-.06-.11-.22-.17-.47-.29z"/></svg>
+        Start Chat
+      </a>
+    </div>
+  </sc-if>
+
+  <button onclick="{{ toggleWhatsapp }}" aria-label="Message MPC on WhatsApp"
+          style="position:relative;width:62px;height:62px;border-radius:999px;border:none;background:#25D366;color:#fff;
+                 cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.20);display:flex;align-items:center;
+                 justify-content:center;padding:0"
+          style-hover="background:#1DA851">
+    <svg width="31" height="31" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.13h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.11.82.83-3.04-.2-.31a8.17 8.17 0 0 1-1.26-4.36c0-4.53 3.7-8.22 8.24-8.22 2.2 0 4.27.86 5.82 2.41a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.21-8.24 8.21zm4.52-6.15c-.25-.12-1.47-.72-1.69-.8-.23-.09-.39-.13-.56.12-.16.25-.64.8-.79.97-.14.16-.29.18-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.39.11-.51.11-.11.25-.29.37-.44.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.16 0-.43.06-.66.31-.22.25-.86.85-.86 2.07s.89 2.4 1.01 2.56c.12.17 1.74 2.66 4.22 3.73.59.25 1.05.4 1.41.52.59.19 1.13.16 1.56.1.47-.07 1.47-.6 1.68-1.18.2-.58.2-1.07.14-1.18-.06-.11-.22-.17-.47-.29z"/></svg>
+    <span style="position:absolute;top:3px;right:3px;width:13px;height:13px;border-radius:999px;background:#25D366;border:2.5px solid #fff"></span>
+  </button>
+</div>
 
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000},&quot;showSomali&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Content&quot;},&quot;autoAdvance&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hero&quot;}}">
 class Component extends DCLogic {
   state = {
-    slideIndex: 0, isNarrow: false, menuOpen: false,
+    slideIndex: 0, isNarrow: false, menuOpen: false, waOpen: false,
     // Form state. `message` empty means nothing has been said to the student
     // yet; `ok` decides whether it is said in green or in red.
     enquirySending: false, enquiryMessage: '', enquiryOk: false,
@@ -928,6 +986,11 @@ class Component extends DCLogic {
   }
   toggleMenu = () => this.setState(s => ({ menuOpen: !s.menuOpen }));
   closeMenu = () => this.setState({ menuOpen: false });
+
+  // The greeting card. Opening it is the only thing this toggles — the button
+  // that actually reaches WhatsApp is a plain <a> inside the card, so the trip
+  // to wa.me never depends on React state having behaved.
+  toggleWhatsapp = () => this.setState(s => ({ waOpen: !s.waOpen }));
   componentDidUpdate(prevProps) {
     const wantsAuto = this.props.autoAdvance ?? true;
     const wanted = prevProps.autoAdvance ?? true;
@@ -1028,6 +1091,8 @@ class Component extends DCLogic {
       menuOpen: this.state.menuOpen,
       toggleMenu: this.toggleMenu,
       closeMenu: this.closeMenu,
+      waOpen: this.state.waOpen,
+      toggleWhatsapp: this.toggleWhatsapp,
       desktopNavDisplay: this.state.isNarrow ? 'none' : 'flex',
       renderSlides,
       showSomali,
