@@ -50,11 +50,118 @@ const MPC_RED        = '#c0392b';
  * no door at all.
  */
 const MPC_NAV = [
-    'payments.php' => ['Payments', ['staff', 'admin']],
-    'students.php' => ['Students', ['staff', 'admin']],
-    'intakes.php'  => ['Intakes',  ['staff', 'admin']],
-    'quizzes.php'  => ['Quizzes',  ['instructor', 'staff', 'admin']],
+    'payments.php'    => ['Payments',    ['staff', 'admin']],
+    'students.php'    => ['Students',    ['staff', 'admin']],
+    'intakes.php'     => ['Intakes',     ['staff', 'admin']],
+    'quizzes.php'     => ['Quizzes',     ['instructor', 'staff', 'admin']],
+    'courses.php'     => ['Courses',     ['admin']],
+    'instructors.php' => ['Instructors', ['admin']],
 ];
+
+/**
+ * The office's own address, e.g. "https://office.mpc.so", or null.
+ *
+ * Read from `office_url` in the config. ABSENT IS THE NORMAL STATE until the
+ * subdomain is proven to work, and it must be: the redirect below sends every
+ * office page to this address, so naming a host that does not answer yet locks
+ * the whole office out of the payment desk. The recovery is to delete the key —
+ * which needs a cPanel login and nothing else, and that is why it is a config
+ * value and not a constant in this repo.
+ */
+function mpc_office_url(): ?string
+{
+    static $url = false;
+
+    if ($url === false) {
+        $cfg = require mpc_config_path();
+        $raw = rtrim(trim((string) ($cfg['office_url'] ?? '')), '/');
+        $url = preg_match('~^https?://[a-z0-9.-]+(:\d+)?$~i', $raw) ? $raw : null;
+    }
+
+    return $url;
+}
+
+/**
+ * Where an office account signs in, for telling a person out loud.
+ *
+ * The configured address when there is one, otherwise the address this request
+ * arrived on — which is right on XAMPP and right on mpc.so before the move.
+ */
+function mpc_office_login_url(): string
+{
+    if (($office = mpc_office_url()) !== null) {
+        return $office . '/login.php';
+    }
+
+    $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $dir  = rtrim(str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/admin/x'))), '/');
+
+    return $host . $dir . '/login.php';
+}
+
+/**
+ * Sends a page view that arrived on the old address to the office's own one.
+ *
+ * Returns the URL to redirect to, or null to carry on. Separate from the
+ * header() call so the decision can be tested without a web server.
+ *
+ * GET AND HEAD ONLY. A POST that arrives on the old address is a form that was
+ * already open in a tab when the move happened — quite possibly a payment with
+ * a student standing at the desk. Redirecting it loses the form: a 302 turns it
+ * into a GET, and a 307 re-posts it to a host where this browser has no session
+ * and the CSRF check refuses it. Either way the payment is gone. So it is
+ * allowed to finish where it started, and the page it lands on afterwards is a
+ * GET, which moves.
+ *
+ * Only the host is compared, never the scheme. Deciding "this request is plain
+ * HTTP" relies on what the server reports, and a host that misreports it behind
+ * a proxy turns an HTTPS redirect into an infinite loop — on the screen the
+ * office cannot work without. The browser's own HTTPS upgrade, and the address
+ * written into the config, already get people onto https.
+ *
+ * The path maps by file name because the office's document root IS a copy of
+ * admin/: mpc.so/office/admin/payments.php and office.mpc.so/payments.php are
+ * the same screen. No other path can reach this function — it runs only from pages
+ * in admin/.
+ */
+function mpc_office_redirect_target(?string $office, array $server): ?string
+{
+    if ($office === null) {
+        return null;
+    }
+
+    $method = strtoupper((string) ($server['REQUEST_METHOD'] ?? 'GET'));
+    if ($method !== 'GET' && $method !== 'HEAD') {
+        return null;
+    }
+
+    $want = strtolower((string) parse_url($office, PHP_URL_HOST));
+    $port = parse_url($office, PHP_URL_PORT);
+    $have = strtolower((string) ($server['HTTP_HOST'] ?? ''));
+
+    if ($have === $want . ($port ? ':' . $port : '') || $have === $want) {
+        return null;
+    }
+
+    $file  = basename((string) parse_url((string) ($server['REQUEST_URI'] ?? '/'), PHP_URL_PATH));
+    $query = (string) parse_url((string) ($server['REQUEST_URI'] ?? ''), PHP_URL_QUERY);
+
+    // Only names shaped like an office screen survive the trip; anything else
+    // lands on the login page. The office host serves nothing else, and an
+    // arbitrary path copied across is an open door for nothing.
+    if (! preg_match('/^[a-z-]+\.php$/', $file)) {
+        $file = 'login.php';
+    }
+
+    // login.php's ?next= is a path on the OLD host — /office/admin/payments.php
+    // — which is a 404 on the new one. Dropped, and login sends them to their
+    // first screen instead, which is where nearly everyone was going anyway.
+    if ($file === 'login.php') {
+        $query = '';
+    }
+
+    return $office . '/' . $file . ($query !== '' ? '?' . $query : '');
+}
 
 /** The nav entries this user may actually open, as file => label. */
 function mpc_nav_for(?array $user): array
@@ -96,6 +203,16 @@ function mpc_money(string|float|int $amount, string $currency = 'USD'): string
  */
 function mpc_page_head(string $title, ?array $user = null): void
 {
+    // The move to the office's own address, when one is configured. Here
+    // because every office page that renders comes through this function, and
+    // every one that does not render redirects to one that does — so a screen
+    // added next year moves with the rest without anyone remembering to ask.
+    $move = mpc_office_redirect_target(mpc_office_url(), $_SERVER);
+    if ($move !== null && ! headers_sent()) {
+        header('Location: ' . $move, true, 302);
+        exit;
+    }
+
     // The logo links to the first screen that actually exists AND that this
     // user may open, so it is never a route to a 404 while the tool is still
     // being built out, and never a route to a redirect for an instructor whose
@@ -115,7 +232,7 @@ function mpc_page_head(string $title, ?array $user = null): void
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{$title} — MPC Office</title>
-<link rel="icon" href="../assets/favicon.ico" sizes="any">
+<link rel="icon" href="./favicon.ico" sizes="any">
 <style>
   *{box-sizing:border-box}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;

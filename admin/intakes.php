@@ -14,9 +14,9 @@
  * screen somebody runs SQL every time a class starts, which means either the
  * office cannot start a class or a developer is on call to do it for them.
  *
- * Courses are NOT editable here. There are two of them, they are seeded in
- * ledger.sql, and their fees are a management decision rather than a desk one.
- * If MPC adds a third program, that is a conversation and then a migration.
+ * Courses are NOT editable here. Their fees are a management decision rather
+ * than a desk one, so they live on admin/courses.php behind
+ * mpc_require_admin(), where staff at the desk cannot reach them.
  */
 
 declare(strict_types=1);
@@ -334,8 +334,8 @@ mpc_message($notice, true);
 
     <?php if (! $instructors): ?>
       <p style="margin-bottom:0">
-        There are no instructor accounts yet. Create one with
-        <code>php bin/adduser.php --email=... --name="..." --role=instructor</code>.
+        There are no instructor accounts yet. An administrator creates them on the
+        <?= $user['role'] === 'admin' ? '<a href="./instructors.php">Instructors</a>' : 'Instructors' ?> screen.
       </p>
     <?php else: ?>
       <form method="post">

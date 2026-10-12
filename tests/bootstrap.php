@@ -158,6 +158,10 @@ $owner->exec('GRANT UPDATE, DELETE ON ' . MPC_TEST_DB . ".quiz_options TO '" . M
 $owner->exec('GRANT UPDATE ON ' . MPC_TEST_DB . ".quiz_attempts TO '" . MPC_TEST_USER . "'@'localhost'");
 $owner->exec('GRANT DELETE ON ' . MPC_TEST_DB . ".intake_instructors TO '" . MPC_TEST_USER . "'@'localhost'");
 
+// The Courses screen — migrations/005. UPDATE and not DELETE: a course with
+// intakes behind it is history. OfficeTest asserts the DELETE is refused.
+$owner->exec('GRANT UPDATE ON ' . MPC_TEST_DB . ".courses TO '" . MPC_TEST_USER . "'@'localhost'");
+
 $owner->exec('FLUSH PRIVILEGES');
 
 // ---------------------------------------------------------------------------
@@ -186,6 +190,9 @@ require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/ledger.php';
 require_once __DIR__ . '/../lib/oauth.php';
 require_once __DIR__ . '/../lib/quiz.php';
+require_once __DIR__ . '/../lib/catalogue.php';
+require_once __DIR__ . '/../lib/instructors.php';
+require_once __DIR__ . '/../lib/page.php';
 
 /** The owner connection, for fixtures and for asserting on things the app cannot see. */
 function test_owner(): PDO
@@ -230,6 +237,10 @@ function test_reset(): void
     $o->exec('DELETE FROM intake_instructors');
 
     $o->exec('DELETE FROM intakes');
+
+    // Courses ARE seeded, so only the ones a test made go. Every test course
+    // is given a slug starting "test-" for exactly this line.
+    $o->exec("DELETE FROM courses WHERE slug LIKE 'test-%'");
     $o->exec('DELETE FROM users');
     $o->exec('DELETE FROM login_attempts');
     $o->exec('DELETE FROM verify_attempts');

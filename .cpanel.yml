@@ -206,6 +206,42 @@ deployment:
     - mkdir -p $DEPLOYPATH/office/admin
     - cp -a admin/. $DEPLOYPATH/office/admin/
 
+    # ...AND ITS LIBRARY, which no task copied until now. Every admin screen
+    # requires dirname(__DIR__) . '/lib/...', and from public_html/office/admin
+    # that is public_html/office/lib — NOT the public_html/lib the task further
+    # up refreshes. So office/admin has been running against whatever lib/ was
+    # put beside it by hand, and a screen needing a new lib file (courses.php
+    # needs lib/catalogue.php) is a fatal error there. Same deny rule, same
+    # config.local.php scrub, for the same reasons as public_html/lib.
+    - mkdir -p $DEPLOYPATH/office/lib
+    - cp -a lib/. $DEPLOYPATH/office/lib/
+    - rm -f $DEPLOYPATH/office/lib/config.local.php
+
+    # ---------------------------------------------------------------------
+    # The office's OWN ADDRESS: office.mpc.so, OUTSIDE public_html.
+    #
+    # $HOME/office.mpc.so/admin is the subdomain's document root, with lib/
+    # beside it, so admin screens find their library exactly as they do here.
+    # mpc-config.php is found too: lib/db.php looks two levels up from lib/,
+    # and from $HOME/office.mpc.so/lib that is $HOME — the same file
+    # public_html/lib reads.
+    #
+    # Outside public_html on purpose. Under it, every office screen would ALSO
+    # be reachable as mpc.so/office.mpc.so/admin/..., a third address for the
+    # same tool, and "which copy is someone logged into" would get one answer
+    # harder. Here it is served by the subdomain and by nothing else.
+    #
+    # Harmless before the subdomain exists: these are copies into a directory
+    # nothing serves yet. The switch is made in cPanel (Domains → Create, root
+    # office.mpc.so/admin) and then by `office_url` in mpc-config.php — see
+    # CLAUDE.md, "The office's own address". Until that key is set, the
+    # office/admin copy above keeps working exactly as it does today.
+    # ---------------------------------------------------------------------
+    - mkdir -p $HOME/office.mpc.so/admin $HOME/office.mpc.so/lib
+    - cp -a admin/. $HOME/office.mpc.so/admin/
+    - cp -a lib/. $HOME/office.mpc.so/lib/
+    - rm -f $HOME/office.mpc.so/lib/config.local.php
+
     # ONLY the deny rule, never the .jsonl files beside it. Enquiries written on
     # the server are the live copy; the repo has no business overwriting them.
     # The rule is re-copied every deploy because the day it goes missing is the

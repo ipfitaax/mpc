@@ -215,20 +215,8 @@ function read_hidden(string $prompt): ?string
     return $line === false ? null : rtrim($line, "\r\n");
 }
 
-/** Readable, unambiguous, and long enough that nobody is tempted to shorten it. */
-function generate_password(): string
-{
-    // Crockford base32 minus vowels: no I/L/O/U to misread, no accidental words.
-    $alphabet = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
-    $out = '';
-    for ($i = 0; $i < 16; $i++) {
-        $out .= $alphabet[random_int(0, strlen($alphabet) - 1)];
-        if ($i % 4 === 3 && $i < 15) {
-            $out .= '-';
-        }
-    }
-    return $out;
-}
+// mpc_generate_password() lives in lib/auth.php, shared with the Instructors
+// screen so the two places that hand out passwords hand out the same kind.
 
 $generated = false;
 
@@ -241,7 +229,7 @@ if (isset($opts['password'])) {
     $password = read_hidden('New password (leave blank to generate one): ');
 
     if ($password === null || $password === '') {
-        $password  = generate_password();
+        $password  = mpc_generate_password();
         $generated = true;
     } else {
         $again = read_hidden('Type it again: ');

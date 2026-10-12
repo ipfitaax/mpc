@@ -221,6 +221,32 @@ application holds no `DELETE` on `quiz_attempts` and neither `UPDATE` nor
 who deserves another chance is given another attempt, which leaves both sittings
 on the record.
 
+## Courses and instructors
+
+Two **administrator-only** screens, `admin/courses.php` and
+`admin/instructors.php`, behind `mpc_require_admin()` in `lib/auth.php`. Staff
+are not offered the links, and a typed URL gets a plain "administrator only"
+page rather than a bounce to a login screen they are already past. The rules
+are in `lib/catalogue.php` and `lib/instructors.php`; the pages only render.
+
+- **A fee change reaches new enrolments only.** `mpc_record_payment()` copies
+  `fee_amount` and `duration_months` onto the enrolment when it is made, and
+  every balance reads those copies. Replace that copy with a join back to
+  `courses` and this screen puts a whole class into arrears with one click.
+- **The short name (`slug`) is frozen once created** — it matches the page
+  address — and the screen does not touch the public website at all. The
+  `course-*.html` pages are edited separately, and the screen says so.
+- **No course is ever deleted.** The application holds UPDATE on `courses` and
+  not DELETE (`migrations/005-office-management.sql`). A course with no
+  payments yet would cascade away its intakes, enrolments and quiz papers.
+- **The Instructors screen cannot touch staff or admin.** Every statement
+  carries `AND role = 'instructor'`, so a posted admin id matches no row.
+  Staff and admin accounts stay on `bin/adduser.php` over SSH: a stolen web
+  session should not be able to mint a quieter second administrator. A
+  student's address is refused, not promoted.
+- **Passwords are generated and shown once**, on the POST response with
+  `no-store` — never through a redirect, which would put them in the URL.
+
 ## The database
 
 `database/` is split so that one file describes what exists and another holds
@@ -252,6 +278,8 @@ move its `CREATE TABLE` and its comments across; do not copy them.
   does not reach forward to tables created later. Skip it and the quiz screens
   load, list papers correctly, and refuse every edit — which reads as a code bug
   for as long as it takes someone to think of it.
+- **`migrations/005-office-management.sql`** — one GRANT, `UPDATE` on
+  `courses`, no table changes. Same caveat as 004: edit the user name, then run it.
 
 Local dev database is **`mpc_db`** on XAMPP, which is **MariaDB 10.4**, not
 MySQL. That distinction matters: `CHECK` constraints are enforced on MariaDB
@@ -333,6 +361,35 @@ A test that cannot fail is worse than a missing one, because it is counted.
 - Merge method: commits land directly on `main` (no PR flow in this repo)
 - Project type: static site plus small PHP endpoints, no build step
 
+### The office's own address — office.mpc.so
+
+The office tool is moving off `mpc.so/office/admin/` to its own host. The code
+is in place; the switch is three manual steps, **in this order**, because the
+last one sends every office page to the new host and a host that does not
+answer yet locks the office out of the payment desk:
+
+1. Deploy as usual. `.cpanel.yml` now also copies `admin/` and `lib/` to
+   `~/office.mpc.so/`, **outside `public_html`**, so the office is reachable
+   through the subdomain and nothing else.
+2. cPanel → **Domains → Create A New Domain**: `office.mpc.so`, untick "Share
+   document root", document root **`office.mpc.so/admin`**. Wait for AutoSSL,
+   then open `https://office.mpc.so/` and sign in there.
+3. Only then add `'office_url' => 'https://office.mpc.so',` to
+   `~/mpc-config.php`. From that moment `mpc.so/admin/…` and
+   `mpc.so/office/admin/…` page loads redirect to it (`mpc_page_head()` →
+   `mpc_office_redirect_target()` in `lib/page.php`).
+
+**If the office cannot get in after step 3, delete that line** — it is the only
+off switch, and it needs a cPanel login and nothing else.
+
+Only GET/HEAD move; a POST finishes where it started, so a payment form open in
+a tab during the switch still saves. Only the host is compared, never the
+scheme, so a proxy misreporting HTTPS cannot become a redirect loop. The old
+`public_html/admin/` and `public_html/office/` trees were placed by hand (live
+`build.txt` was a 404 on 2026-10-12: no cPanel deploy had landed yet). Leave
+them until the new address has been in daily use, then remove them in File
+Manager.
+
 ### Custom deploy hooks
 
 - Pre-merge: `composer test` and `php bin/selftest.php` — neither runs on the
@@ -371,6 +428,13 @@ printf 'deployed:   %s\nlocal HEAD: %s\n' "$(printf '%s\n' "$STAMP" | head -1)" 
 #                                     500 means lib/oauth.php did not deploy.
 for p in account.php quizzes.php "quiz.php?id=1" api/auth/google/start.php; do
   printf "%-28s %s\n" "/$p" "$(curl -s -o /dev/null -m 20 -w '%{http_code}' "https://mpc.so/$p")"
+done
+
+# The office's own host, once it exists. login.php 200; courses.php and
+# instructors.php 302 to the login page signed out. A 500 on either means
+# ~/office.mpc.so/lib is missing lib/catalogue.php or lib/instructors.php.
+for p in "" login.php courses.php instructors.php; do
+  printf "office/%-21s %s\n" "$p" "$(curl -s -o /dev/null -m 20 -w '%{http_code}' "https://office.mpc.so/$p")"
 done
 ```
 
@@ -446,6 +510,11 @@ mysql -u USER -p DBNAME < database/migrations/004-assessment.sql
 including the GRANT section at its bottom, with the user and database names
 edited. Skip the grants and the screens load, list papers, and refuse every
 edit — which reads as a code bug rather than a missing privilege.
+
+`database/migrations/005-office-management.sql` is the same kind of chore, one
+line long: `UPDATE` on `courses`, for the Courses screen. Skip it and adding a
+course works while changing one fails with a privileges error. That reads as a
+bug in the edit branch, and it is not one.
 
 The code survives the gap rather than crashing through it:
 `mpc_quiz_tables_present()` in `lib/quiz.php` names the migration on the office

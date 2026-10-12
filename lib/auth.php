@@ -227,6 +227,63 @@ function mpc_require_login(): array
 }
 
 /**
+ * Admits the administrator only, and says so to anyone else who is signed in.
+ *
+ * Used by the Courses and Instructors screens. Both change what the business
+ * IS rather than what happened at the desk today: a course fee is a pricing
+ * decision, and an instructor account is a new person who can read every
+ * student's grades on the classes they teach. The intakes screen has said since
+ * it was written that fees are "a management decision rather than a desk one";
+ * this is that sentence enforced.
+ *
+ * NOT a redirect to the login page for signed-in staff. login.php sends a
+ * signed-in user straight back to their first screen, so redirecting them there
+ * is a bounce that reads as a broken system. They are signed in; they are just
+ * not allowed in here, and the page says that. The nav never offers them the
+ * link, so the only way to land here is a typed or bookmarked URL.
+ */
+function mpc_require_admin(): array
+{
+    $user = mpc_require_login();
+
+    if ($user['role'] !== 'admin') {
+        require_once __DIR__ . '/page.php';
+
+        http_response_code(403);
+        mpc_page_head('Administrator only', $user);
+        echo '<div class="card"><p style="margin:0">This screen changes courses, fees '
+           . 'and instructor accounts, so only an administrator can open it. '
+           . 'Nothing here is broken &mdash; ask an administrator if something needs changing.</p></div>';
+        mpc_page_foot();
+        exit;
+    }
+
+    return $user;
+}
+
+/**
+ * A password to hand to a new office account, shown once.
+ *
+ * Readable, unambiguous, and long enough that nobody is tempted to shorten it.
+ * It lives here rather than in bin/adduser.php because the Instructors screen
+ * hands out passwords too, and two generators is how one of them ends up
+ * producing eight lowercase letters.
+ */
+function mpc_generate_password(): string
+{
+    // Crockford base32 minus vowels: no I/L/O/U to misread, no accidental words.
+    $alphabet = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
+    $out = '';
+    for ($i = 0; $i < 16; $i++) {
+        $out .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+        if ($i % 4 === 3 && $i < 15) {
+            $out .= '-';
+        }
+    }
+    return $out;
+}
+
+/**
  * Counts recent failures, so guessing costs something.
  *
  * Checked against BOTH the email and the IP: by email so one account cannot be

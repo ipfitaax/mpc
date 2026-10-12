@@ -39,7 +39,8 @@ account.php         where a signed-in student lands
 quizzes.php         a student's quizzes, and what they scored
 quiz.php            sit one quiz, submit it, see the result
 lib/                the shared rules: db, auth, oauth, ledger, quiz, page chrome
-admin/              the office tool: payments, students, intakes, quizzes
+admin/              the office tool: payments, students, intakes, quizzes,
+                    courses and instructors (admin only); office.mpc.so's root
 database/           ledger.sql is the database; future.sql is what is only designed
 bin/                adduser, backup, selftest — run from a shell, never the web
 tests/              PHPUnit, against a scratch database it builds itself

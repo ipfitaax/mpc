@@ -34,6 +34,7 @@
  *     GRANT UPDATE, DELETE ON mpc_db.quiz_options TO 'mpc_app'@'localhost';
  *     GRANT UPDATE ON mpc_db.quiz_attempts TO 'mpc_app'@'localhost';
  *     GRANT DELETE ON mpc_db.intake_instructors TO 'mpc_app'@'localhost';
+ *     GRANT UPDATE ON mpc_db.courses TO 'mpc_app'@'localhost';
  *     FLUSH PRIVILEGES;
  *
  * users and enrollments get UPDATE because a student's phone number and an
@@ -95,6 +96,21 @@ return [
     //   Production:  https://mpc.so/api/auth/google/callback.php
     //   Local XAMPP: http://localhost/mpc/api/auth/google/callback.php
     //
+    // -----------------------------------------------------------------------
+    // The office's own address. OPTIONAL, and leave it out until it works.
+    // -----------------------------------------------------------------------
+    // When set, every office page opened anywhere else — mpc.so/admin/...,
+    // mpc.so/office/admin/... — is sent here instead (lib/page.php,
+    // mpc_office_redirect_target). Forms already open on the old address still
+    // save where they started; only page loads move.
+    //
+    // SET IT LAST. Open https://office.mpc.so/login.php and sign in there
+    // FIRST. Naming a host that does not answer yet sends the whole office —
+    // payment desk included — to a dead address, and the only fix is deleting
+    // this line again. Scheme and host only, no path, no trailing slash.
+    //
+    // 'office_url' => 'https://office.mpc.so',
+
     // 'google' => [
     //     'client_id'     => '....apps.googleusercontent.com',
     //     'client_secret' => '',

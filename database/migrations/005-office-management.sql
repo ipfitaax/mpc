@@ -1,0 +1,41 @@
+-- 005 — the Courses and Instructors screens.
+--
+-- NO TABLE CHANGES. Both screens write to tables that already exist. What they
+-- need is one privilege the application user has never held:
+--
+--   UPDATE on `courses`, for admin/courses.php to change a title, length or
+--   monthly fee.
+--
+-- The Instructors screen needs nothing new — the application has held UPDATE on
+-- `users` since the ledger shipped, because phone numbers change.
+--
+-- WHAT DELIBERATELY STILL GETS NOTHING
+--   DELETE on `courses`. Intakes hang off a course with ON DELETE CASCADE, and
+--   so do quiz papers; enrolments cascade off intakes. The cascade stops only
+--   at `payments`, whose RESTRICT refuses it — so a course with money behind it
+--   cannot be deleted, but a course with a class enrolled and nobody paid YET
+--   can, and takes its intakes, its enrolments and every quiz paper written for
+--   it along in one statement, with nothing logged. A course MPC stops teaching
+--   simply gets no new intakes.
+--
+-- WHY SKIPPING THIS LOOKS LIKE A CODE BUG
+--   Without it the Courses screen loads, lists every course, ADDS new ones
+--   (INSERT was granted on the whole schema), and refuses every change to an
+--   existing one with a privileges error. "Adding works and editing does not"
+--   reads as a bug in the edit branch. It is not; it is this file, unrun.
+--
+-- Commented out on purpose, like 004: a GRANT names a user this file cannot
+-- know. On cPanel the application user is `cpaneluser_mpcapp`, not `mpc_app`,
+-- and the line as written would grant to a user that does not exist instead of
+-- failing. Uncomment, fix both names, then run as the OWNER account:
+--
+--     cd ~/repositories/mpc
+--     mysql -u OWNER -p DBNAME < database/migrations/005-office-management.sql
+
+-- GRANT UPDATE ON mpc_db.courses TO 'mpc_app'@'localhost';
+-- FLUSH PRIVILEGES;
+
+-- To check afterwards, as the application user:
+--     SHOW GRANTS;
+-- `courses` must show UPDATE and must NOT show DELETE. tests/bootstrap.php
+-- builds exactly this grant for the scratch database.
